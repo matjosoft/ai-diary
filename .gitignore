@@ -1,0 +1,17 @@
+# Secrets
+.env
+person.md
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# User data
+diary.db
+audio/
+reports/
+
+# IDE / tools
+.claude/

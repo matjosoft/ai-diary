@@ -1,0 +1,24 @@
+Query the DB directly:
+
+.venv/bin/python -c "
+from app.database import init_db, get_connection
+import json
+with get_connection() as conn:
+    for row in conn.execute('SELECT * FROM entries').fetchall():
+        print(f'Date: {row[\"date\"]}')
+        print(f'Transcription: {row[\"transcription\"][:200]}...')
+        print(f'Summary: {row[\"summary\"]}')
+        print(f'Mood: {row[\"mood\"]} ({row[\"mood_score\"]}/10)')
+        print(f'Events: {json.loads(row[\"events\"])}')
+        print(f'People: {json.loads(row[\"people\"])}')
+        print(f'Topics: {json.loads(row[\"topics\"])}')
+        print()
+"
+Or hit the API (if the server is running):
+
+
+curl -s http://localhost:8000/api/entries | python3 -m json.tool
+Or just dump the raw DB:
+
+
+sqlite3 diary.db "SELECT * FROM entries;"

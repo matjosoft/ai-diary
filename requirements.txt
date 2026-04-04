@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic-settings
+python-dotenv
+openai
+transformers
+torch
+accelerate
+soundfile
