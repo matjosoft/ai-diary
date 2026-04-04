@@ -14,7 +14,7 @@ from app.services.llm import _get_client, PROJECT_ROOT
 
 SUMMARY_PROMPT = """\
 Du får dagboksanteckningar för en period. Skriv en koncis sammanfattning \
-(max 200 ord) som fångar de viktigaste händelserna, humörtrender, \
+(max 300 ord) som fångar de viktigaste händelserna, humörtrender, \
 personer och ämnen. Sammanfattningen ska vara tillräckligt informativ \
 för att besvara övergripande frågor om perioden utan att behöva läsa \
 enskilda dagboksanteckningar.
