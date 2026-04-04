@@ -22,3 +22,8 @@ Or just dump the raw DB:
 
 
 sqlite3 diary.db "SELECT * FROM entries;"
+
+
+---
+sudo systemctl status ai-diary
+journalctl -u ai-diary -f

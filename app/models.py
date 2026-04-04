@@ -28,8 +28,19 @@ class EntryResponse(BaseModel):
     updated_at: datetime
 
 
+class QueryIntent(BaseModel):
+    time_scope: str  # "day" | "week" | "month" | "year" | "all"
+    date_from: str | None = None
+    date_to: str | None = None
+    search_terms: list[str] = []
+    search_fields: list[str] = []
+    needs_full_text: bool = False
+    question_type: str  # "summary" | "detail" | "trend" | "lookup"
+
+
 class ChatRequest(BaseModel):
     question: str
+    messages: list[dict] = []  # conversation history from Open WebUI
 
 
 class ChatResponse(BaseModel):

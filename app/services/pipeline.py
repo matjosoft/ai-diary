@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.database import get_connection
 from app.services.llm import analyze_entry
+from app.services.summaries import refresh_summaries_for_date
 from app.services.transcription import transcribe
 
 
@@ -78,6 +79,7 @@ def _process_audio_sync(audio_path: Path):
                 ),
             )
             print(f"Updated entry for {entry_date}")
+            asyncio.run(refresh_summaries_for_date(entry_date))
         else:
             # Create new entry
             analysis = asyncio.run(analyze_entry(transcription))
@@ -103,3 +105,4 @@ def _process_audio_sync(audio_path: Path):
                 ),
             )
             print(f"Created entry for {entry_date}")
+            asyncio.run(refresh_summaries_for_date(entry_date))

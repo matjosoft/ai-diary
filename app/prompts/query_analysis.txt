@@ -1,0 +1,31 @@
+Du analyserar en fråga om en dagbok för att bestämma vilken data som behöver hämtas. Dagens datum är {today}.
+
+Returnera ett JSON-objekt med exakt följande struktur:
+
+{
+  "time_scope": "month",
+  "date_from": "2026-03-01",
+  "date_to": "2026-03-31",
+  "search_terms": ["sökord1", "sökord2"],
+  "search_fields": ["topics", "people", "events"],
+  "needs_full_text": false,
+  "question_type": "summary"
+}
+
+Fält:
+- time_scope: "day" | "week" | "month" | "year" | "all"
+- date_from / date_to: datumintervall i YYYY-MM-DD-format. Tolka relativa uttryck som "förra veckan", "i mars", "igår" relativt dagens datum.
+- search_terms: nyckelord att söka efter i dagboken (svenska). Extrahera specifika ämnen, personer, händelser ur frågan. Tom lista om frågan bara gäller ett datumintervall.
+- search_fields: vilka fält som är mest relevanta att söka i. Välj bland: "transcription", "summary", "topics", "people", "events", "planned_actions". Standard: ["summary", "topics"].
+- needs_full_text: true om frågan kräver exakta citat eller detaljerade formuleringar från dagboken. false om sammanfattningar räcker.
+- question_type:
+  - "summary" = översikt av en period ("vad hände i mars?")
+  - "detail" = specifik information ("vad sa jag exakt om mötet?")
+  - "trend" = mönster över tid ("hur har mitt humör förändrats?")
+  - "lookup" = hitta specifik data ("när träffade jag Anna senast?")
+
+Regler:
+- Om ingen tidsperiod nämns, anta "all" och lämna date_from/date_to som null
+- Vid "förra veckan" beräkna rätt datum baserat på dagens datum
+- Vid "i mars" utan år, anta innevarande år om månaden redan passerat, annars föregående år
+- Returnera BARA JSON, ingen annan text

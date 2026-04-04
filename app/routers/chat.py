@@ -1,32 +1,21 @@
-import json
-
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 
-from app.database import get_connection
 from app.models import ChatRequest, ChatResponse
 from app.services.llm import chat_query
+from app.services.search import analyze_query, smart_retrieve
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
 @router.post("")
 async def chat(req: ChatRequest):
-    with get_connection() as conn:
-        rows = conn.execute(
-            "SELECT * FROM entries ORDER BY date DESC LIMIT 100"
-        ).fetchall()
+    # Step 1: Analyze the question to determine intent and scope
+    intent = await analyze_query(req.question, req.messages or None)
 
-    if not rows:
-        return JSONResponse(
-            status_code=404, content={"error": "No diary entries found"}
-        )
+    # Step 2: Retrieve the right level of context
+    context = await smart_retrieve(intent)
 
-    entries = [dict(row) for row in rows]
-    for entry in entries:
-        for field in ("audio_files", "events", "people", "planned_actions", "topics"):
-            entry[field] = json.loads(entry[field])
+    # Step 3: Generate answer with the retrieved context
+    answer = await chat_query(req.question, context, req.messages or None)
 
-    answer = await chat_query(req.question, entries)
-
-    return ChatResponse(answer=answer, entries_used=len(entries))
+    return ChatResponse(answer=answer, entries_used=context.count("###"))

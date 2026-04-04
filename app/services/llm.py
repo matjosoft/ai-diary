@@ -54,31 +54,29 @@ async def analyze_entry(transcription: str) -> AnalysisResult:
     return AnalysisResult(**data)
 
 
-async def chat_query(question: str, entries: list[dict]) -> str:
+async def chat_query(
+    question: str,
+    context: str,
+    conversation_history: list[dict] | None = None,
+) -> str:
     client = _get_client()
     system_prompt = _load_prompt("chat_query.txt")
 
-    entries_text = "\n\n".join(
-        f"## {e['date']}\n"
-        f"Sammanfattning: {e.get('summary', 'Saknas')}\n"
-        f"Humör: {e.get('mood', '?')} ({e.get('mood_score', '?')}/10)\n"
-        f"Händelser: {', '.join(e.get('events', []))}\n"
-        f"Personer: {', '.join(e.get('people', []))}\n"
-        f"Ämnen: {', '.join(e.get('topics', []))}\n"
-        f"Planerade åtgärder: {', '.join(e.get('planned_actions', []))}\n"
-        f"Transkription: {e.get('transcription', '')}"
-        for e in entries
-    )
+    messages = [{"role": "system", "content": system_prompt}]
+
+    # Include conversation history for follow-up questions
+    if conversation_history:
+        for msg in conversation_history[-6:]:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+
+    messages.append({
+        "role": "user",
+        "content": f"Dagboksdata:\n\n{context}\n\nFråga: {question}",
+    })
 
     response = await client.chat.completions.create(
         model=settings.LLM_MODEL,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": f"Dagboksdata:\n\n{entries_text}\n\nFråga: {question}",
-            },
-        ],
+        messages=messages,
         temperature=0.5,
     )
 

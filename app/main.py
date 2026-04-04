@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.config import settings
-from app.database import init_db
+from app.database import backfill_fts, init_db
 from app.routers import chat, entries, reports
 
 
@@ -12,6 +12,7 @@ async def lifespan(app: FastAPI):
     settings.audio_dir.mkdir(parents=True, exist_ok=True)
     settings.reports_dir.mkdir(parents=True, exist_ok=True)
     init_db()
+    backfill_fts()
     yield
 
 
