@@ -27,3 +27,6 @@ sqlite3 diary.db "SELECT * FROM entries;"
 ---
 sudo systemctl status ai-diary
 journalctl -u ai-diary -f
+
+----
+sudo systemctl restart ai-diary && systemctl status ai-diary --no-pager | head -10

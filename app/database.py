@@ -85,7 +85,8 @@ def backfill_fts():
 
 @contextmanager
 def get_connection():
-    conn = sqlite3.connect(get_db_path())
+    conn = sqlite3.connect(get_db_path(), timeout=30)
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.row_factory = sqlite3.Row
     try:
         yield conn

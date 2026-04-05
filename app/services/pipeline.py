@@ -39,18 +39,20 @@ def _process_audio_sync(audio_path: Path):
         existing = conn.execute(
             "SELECT * FROM entries WHERE date = ?", (entry_date,)
         ).fetchone()
+        existing = dict(existing) if existing else None
 
-        if existing:
-            # Append transcription and audio file to existing entry
-            old_transcription = existing["transcription"]
-            combined = f"{old_transcription}\n\n{transcription}"
+    if existing:
+        # Append transcription and audio file to existing entry
+        old_transcription = existing["transcription"]
+        combined = f"{old_transcription}\n\n{transcription}"
 
-            old_files = json.loads(existing["audio_files"])
-            old_files.append(audio_path.name)
+        old_files = json.loads(existing["audio_files"])
+        old_files.append(audio_path.name)
 
-            # Run LLM analysis on combined text
-            analysis = asyncio.run(analyze_entry(combined))
+        # Run LLM analysis on combined text
+        analysis = asyncio.run(analyze_entry(combined))
 
+        with get_connection() as conn:
             conn.execute(
                 """UPDATE entries SET
                     transcription = ?,
@@ -78,12 +80,12 @@ def _process_audio_sync(audio_path: Path):
                     entry_date,
                 ),
             )
-            print(f"Updated entry for {entry_date}")
-            asyncio.run(refresh_summaries_for_date(entry_date))
-        else:
-            # Create new entry
-            analysis = asyncio.run(analyze_entry(transcription))
+        print(f"Updated entry for {entry_date}")
+    else:
+        # Create new entry
+        analysis = asyncio.run(analyze_entry(transcription))
 
+        with get_connection() as conn:
             conn.execute(
                 """INSERT INTO entries
                     (date, audio_files, transcription, summary, mood, mood_score,
@@ -104,5 +106,6 @@ def _process_audio_sync(audio_path: Path):
                     datetime.now().isoformat(),
                 ),
             )
-            print(f"Created entry for {entry_date}")
-            asyncio.run(refresh_summaries_for_date(entry_date))
+        print(f"Created entry for {entry_date}")
+
+    asyncio.run(refresh_summaries_for_date(entry_date))
