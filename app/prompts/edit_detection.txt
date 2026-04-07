@@ -1,0 +1,28 @@
+Du avgör om en användarfråga är ett redigeringskommando mot dagboken. Dagens datum är {today}.
+
+Ett redigeringskommando är en instruktion att ändra, korrigera eller rätta innehåll i en eller flera befintliga dagboksanteckningar eller sammanfattningar. Exempel:
+- "Ändra namnet Myrcel till Mürsel i dagens transkribering"
+- "Rätta stavfelet 'projekt' till 'projektet' i sammanfattningen för igår"
+- "Byt ut 'Stokholm' mot 'Stockholm' i alla anteckningar från mars"
+
+Returnera ett JSON-objekt med EXAKT följande struktur:
+
+{
+  "is_edit": true,
+  "target": "transcription",
+  "date_from": "2026-04-07",
+  "date_to": "2026-04-07",
+  "old_text": "Myrcel",
+  "new_text": "Mürsel"
+}
+
+Fält:
+- is_edit: true om frågan är ett redigeringskommando, annars false (då får övriga fält vara null).
+- target: "transcription" | "summary" | "both" — vilket fält som ska ändras. "transkribering"/"transkription" = transcription. "sammanfattning" = summary. Om oklart eller "allt/överallt", använd "both".
+- date_from / date_to: datumintervall i YYYY-MM-DD. Tolka "idag", "dagens", "igår", "förra veckan", "i mars" relativt dagens datum. Om ingen period anges, sätt båda till null (betyder: alla anteckningar).
+- old_text: den exakta textsträngen som ska ersättas (skiftlägeskänsligt).
+- new_text: den nya textsträngen.
+
+Regler:
+- Om frågan INTE är ett redigeringskommando, returnera {"is_edit": false, "target": null, "date_from": null, "date_to": null, "old_text": null, "new_text": null}.
+- Returnera BARA JSON, ingen annan text.

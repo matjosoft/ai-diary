@@ -38,6 +38,15 @@ class QueryIntent(BaseModel):
     question_type: str  # "summary" | "detail" | "trend" | "lookup"
 
 
+class EditCommand(BaseModel):
+    is_edit: bool
+    target: str | None = None  # "transcription" | "summary" | "both"
+    date_from: str | None = None
+    date_to: str | None = None
+    old_text: str | None = None
+    new_text: str | None = None
+
+
 class ChatRequest(BaseModel):
     question: str
     messages: list[dict] = []  # conversation history from Open WebUI
