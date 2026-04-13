@@ -8,12 +8,13 @@ Flow:
 """
 
 import json
-from datetime import date
+from datetime import date, datetime
 
 from app.config import settings
 from app.database import get_connection
 from app.models import EditCommand
-from app.services.llm import _get_client, _load_prompt
+from app.services.llm import _get_client, _load_prompt, analyze_entry
+from app.services.summaries import refresh_summaries_for_date
 
 
 async def detect_edit(
@@ -104,6 +105,46 @@ def apply_edit(cmd: EditCommand) -> tuple[int, list[str]]:
         )
 
     return len(affected_dates), affected_dates
+
+
+async def reanalyze_affected_entries(dates: list[str]):
+    """Re-run LLM analysis on affected entries to refresh derived fields."""
+    for entry_date in dates:
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT transcription FROM entries WHERE date = ?", (entry_date,)
+            ).fetchone()
+        if not row:
+            continue
+
+        analysis = await analyze_entry(row["transcription"])
+
+        with get_connection() as conn:
+            conn.execute(
+                """UPDATE entries SET
+                    summary = ?,
+                    mood = ?,
+                    mood_score = ?,
+                    events = ?,
+                    people = ?,
+                    planned_actions = ?,
+                    topics = ?,
+                    updated_at = ?
+                WHERE date = ?""",
+                (
+                    analysis.summary,
+                    analysis.mood,
+                    analysis.mood_score,
+                    json.dumps(analysis.events),
+                    json.dumps(analysis.people),
+                    json.dumps(analysis.planned_actions),
+                    json.dumps(analysis.topics),
+                    datetime.now().isoformat(),
+                    entry_date,
+                ),
+            )
+
+        await refresh_summaries_for_date(entry_date)
 
 
 def format_edit_confirmation(cmd: EditCommand, count: int, dates: list[str]) -> str:

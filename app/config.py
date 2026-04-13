@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     AUDIO_DIR: str = "./audio"
     REPORTS_DIR: str = "./reports"
 
+    # Telegram
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_ALLOWED_USERS: str = ""  # comma-separated Telegram user IDs
+
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8000

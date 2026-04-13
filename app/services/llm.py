@@ -58,9 +58,19 @@ async def chat_query(
     question: str,
     context: str,
     conversation_history: list[dict] | None = None,
+    client_type: str = "web",
 ) -> str:
     client = _get_client()
     system_prompt = _load_prompt("chat_query.txt")
+
+    # Override formatting section for non-web clients
+    format_file = PROMPTS_DIR / f"chat_format_{client_type}.txt"
+    if format_file.exists():
+        # Replace everything from "## Formatering" onward with the client-specific version
+        marker = "## Formatering"
+        if marker in system_prompt:
+            system_prompt = system_prompt[: system_prompt.index(marker)]
+        system_prompt += format_file.read_text()
 
     messages = [{"role": "system", "content": system_prompt}]
 

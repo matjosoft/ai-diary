@@ -3,6 +3,7 @@ uvicorn
 pydantic-settings
 python-dotenv
 openai
+python-telegram-bot
 transformers
 torch
 accelerate

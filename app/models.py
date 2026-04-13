@@ -50,6 +50,7 @@ class EditCommand(BaseModel):
 class ChatRequest(BaseModel):
     question: str
     messages: list[dict] = []  # conversation history from Open WebUI
+    client_type: str = "web"  # "web", "telegram", etc.
 
 
 class ChatResponse(BaseModel):

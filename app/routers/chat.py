@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.models import ChatRequest, ChatResponse
-from app.services.edits import apply_edit, detect_edit, format_edit_confirmation
+from app.services.edits import apply_edit, detect_edit, format_edit_confirmation, reanalyze_affected_entries
 from app.services.llm import chat_query
 from app.services.search import analyze_query, smart_retrieve
 
@@ -14,6 +14,8 @@ async def chat(req: ChatRequest):
     edit_cmd = await detect_edit(req.question, req.messages or None)
     if edit_cmd.is_edit:
         count, dates = apply_edit(edit_cmd)
+        if dates:
+            await reanalyze_affected_entries(dates)
         answer = format_edit_confirmation(edit_cmd, count, dates)
         return ChatResponse(answer=answer, entries_used=count)
 
@@ -24,6 +26,6 @@ async def chat(req: ChatRequest):
     context = await smart_retrieve(intent)
 
     # Step 3: Generate answer with the retrieved context
-    answer = await chat_query(req.question, context, req.messages or None)
+    answer = await chat_query(req.question, context, req.messages or None, req.client_type)
 
     return ChatResponse(answer=answer, entries_used=context.count("###"))
