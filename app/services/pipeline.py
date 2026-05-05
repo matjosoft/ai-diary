@@ -64,6 +64,7 @@ def _process_audio_sync(audio_path: Path):
                     people = ?,
                     planned_actions = ?,
                     topics = ?,
+                    meals = ?,
                     updated_at = ?
                 WHERE date = ?""",
                 (
@@ -76,6 +77,7 @@ def _process_audio_sync(audio_path: Path):
                     json.dumps(analysis.people),
                     json.dumps(analysis.planned_actions),
                     json.dumps(analysis.topics),
+                    json.dumps(analysis.meals, ensure_ascii=False),
                     datetime.now().isoformat(),
                     entry_date,
                 ),
@@ -89,8 +91,8 @@ def _process_audio_sync(audio_path: Path):
             conn.execute(
                 """INSERT INTO entries
                     (date, audio_files, transcription, summary, mood, mood_score,
-                     events, people, planned_actions, topics, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                     events, people, planned_actions, topics, meals, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     entry_date,
                     json.dumps([audio_path.name]),
@@ -102,6 +104,7 @@ def _process_audio_sync(audio_path: Path):
                     json.dumps(analysis.people),
                     json.dumps(analysis.planned_actions),
                     json.dumps(analysis.topics),
+                    json.dumps(analysis.meals, ensure_ascii=False),
                     datetime.now().isoformat(),
                     datetime.now().isoformat(),
                 ),

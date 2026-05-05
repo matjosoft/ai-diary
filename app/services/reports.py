@@ -67,4 +67,5 @@ def _rows_to_dicts(rows) -> list[dict]:
     for entry in entries:
         for field in ("audio_files", "events", "people", "planned_actions", "topics"):
             entry[field] = json.loads(entry[field])
+        entry["meals"] = json.loads(entry["meals"])
     return entries

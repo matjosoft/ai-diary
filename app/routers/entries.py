@@ -26,6 +26,7 @@ def _row_to_entry(row) -> EntryResponse:
         people=json.loads(row["people"]),
         planned_actions=json.loads(row["planned_actions"]),
         topics=json.loads(row["topics"]),
+        meals=json.loads(row["meals"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )

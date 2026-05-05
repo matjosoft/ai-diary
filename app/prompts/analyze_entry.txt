@@ -9,7 +9,8 @@ Analysera texten och returnera ett JSON-objekt med exakt följande struktur:
   "events": ["händelse 1", "händelse 2"],
   "people": ["person 1", "person 2"],
   "planned_actions": ["planerad åtgärd 1", "planerad åtgärd 2"],
-  "topics": ["ämne 1", "ämne 2"]
+  "topics": ["ämne 1", "ämne 2"],
+  "meals": {"frukost": "havregryn med blåbär", "lunch": "kyckling och ris", "middag": "fisk med potatis"}
 }
 
 Regler:
@@ -17,5 +18,7 @@ Regler:
 - Skriv summary, events, planned_actions och topics på svenska
 - mood ska vara ett enda ord på svenska
 - Om inget nämns för ett listfält, returnera en tom lista []
+- meals är ett objekt med nycklarna "frukost", "lunch" och "middag" (använd exakt dessa svenska nycklar). Inkludera bara de måltider som faktiskt nämns i texten — utelämna nycklar för måltider som inte nämns. Värdet är en kort beskrivning på svenska av vad som åts (t.ex. "kyckling med ris").
+- Om ingen måltid nämns alls, returnera ett tomt objekt {} för meals
 - Använd personens smeknamn/kortnamn i sammanfattningen för en personlig ton
 - Returnera BARA JSON, ingen annan text

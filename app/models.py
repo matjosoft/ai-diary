@@ -10,6 +10,7 @@ class AnalysisResult(BaseModel):
     people: list[str]
     planned_actions: list[str]
     topics: list[str]
+    meals: dict[str, str] = {}
 
 
 class EntryResponse(BaseModel):
@@ -24,6 +25,7 @@ class EntryResponse(BaseModel):
     people: list[str] = []
     planned_actions: list[str] = []
     topics: list[str] = []
+    meals: dict[str, str] = {}
     created_at: datetime
     updated_at: datetime
 

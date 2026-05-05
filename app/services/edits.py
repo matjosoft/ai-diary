@@ -129,6 +129,7 @@ async def reanalyze_affected_entries(dates: list[str]):
                     people = ?,
                     planned_actions = ?,
                     topics = ?,
+                    meals = ?,
                     updated_at = ?
                 WHERE date = ?""",
                 (
@@ -139,6 +140,7 @@ async def reanalyze_affected_entries(dates: list[str]):
                     json.dumps(analysis.people),
                     json.dumps(analysis.planned_actions),
                     json.dumps(analysis.topics),
+                    json.dumps(analysis.meals, ensure_ascii=False),
                     datetime.now().isoformat(),
                     entry_date,
                 ),

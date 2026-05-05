@@ -130,6 +130,7 @@ def _fetch_entries(
     for entry in entries:
         for field in ("audio_files", "events", "people", "planned_actions", "topics"):
             entry[field] = json.loads(entry[field])
+        entry["meals"] = json.loads(entry["meals"])
     return entries
 
 
@@ -263,6 +264,10 @@ def _format_entry(entry: dict, include_transcription: bool) -> str:
         f"Ämnen: {', '.join(entry.get('topics', []))}",
         f"Planerade åtgärder: {', '.join(entry.get('planned_actions', []))}",
     ]
+    meals = entry.get("meals") or {}
+    if meals:
+        meals_str = ", ".join(f"{k}: {v}" for k, v in meals.items())
+        parts.append(f"Måltider: {meals_str}")
     if include_transcription:
         parts.append(f"Transkription: {entry.get('transcription', '')}")
     return "\n".join(parts) + "\n"

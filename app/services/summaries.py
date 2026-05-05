@@ -35,7 +35,14 @@ def _rows_to_dicts(rows) -> list[dict]:
     for entry in entries:
         for field in ("audio_files", "events", "people", "planned_actions", "topics"):
             entry[field] = json.loads(entry[field])
+        entry["meals"] = json.loads(entry["meals"])
     return entries
+
+
+def _format_meals(meals: dict) -> str:
+    if not meals:
+        return ""
+    return ", ".join(f"{k}: {v}" for k, v in meals.items())
 
 
 async def generate_period_summary(period_type: str, period_key: str, force: bool = False) -> dict | None:
@@ -83,13 +90,19 @@ async def generate_period_summary(period_type: str, period_key: str, force: bool
     entries = _rows_to_dicts(rows)
 
     # Build compact input for the LLM (daily summaries + metadata only)
-    entries_text = "\n".join(
-        f"- {e['date']}: {e.get('summary', 'Saknas')} "
-        f"Humör: {e.get('mood', '?')} ({e.get('mood_score', '?')}/10) "
-        f"Ämnen: {', '.join(e.get('topics', []))} "
-        f"Personer: {', '.join(e.get('people', []))}"
-        for e in entries
-    )
+    def _line(e: dict) -> str:
+        line = (
+            f"- {e['date']}: {e.get('summary', 'Saknas')} "
+            f"Humör: {e.get('mood', '?')} ({e.get('mood_score', '?')}/10) "
+            f"Ämnen: {', '.join(e.get('topics', []))} "
+            f"Personer: {', '.join(e.get('people', []))}"
+        )
+        meals_str = _format_meals(e.get("meals") or {})
+        if meals_str:
+            line += f" Måltider: {meals_str}"
+        return line
+
+    entries_text = "\n".join(_line(e) for e in entries)
 
     # Load person context
     person_info = ""

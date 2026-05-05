@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS entries (
     people TEXT NOT NULL DEFAULT '[]',
     planned_actions TEXT NOT NULL DEFAULT '[]',
     topics TEXT NOT NULL DEFAULT '[]',
+    meals TEXT NOT NULL DEFAULT '{}',
     created_at DATETIME NOT NULL DEFAULT (datetime('now')),
     updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 );
@@ -42,26 +43,27 @@ CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
     people,
     topics,
     planned_actions,
+    meals,
     content='entries',
     content_rowid='id'
 );
 
 -- Triggers to keep FTS index in sync with entries table
 CREATE TRIGGER IF NOT EXISTS entries_ai AFTER INSERT ON entries BEGIN
-    INSERT INTO entries_fts(rowid, date, transcription, summary, events, people, topics, planned_actions)
-    VALUES (new.id, new.date, new.transcription, new.summary, new.events, new.people, new.topics, new.planned_actions);
+    INSERT INTO entries_fts(rowid, date, transcription, summary, events, people, topics, planned_actions, meals)
+    VALUES (new.id, new.date, new.transcription, new.summary, new.events, new.people, new.topics, new.planned_actions, new.meals);
 END;
 
 CREATE TRIGGER IF NOT EXISTS entries_ad AFTER DELETE ON entries BEGIN
-    INSERT INTO entries_fts(entries_fts, rowid, date, transcription, summary, events, people, topics, planned_actions)
-    VALUES ('delete', old.id, old.date, old.transcription, old.summary, old.events, old.people, old.topics, old.planned_actions);
+    INSERT INTO entries_fts(entries_fts, rowid, date, transcription, summary, events, people, topics, planned_actions, meals)
+    VALUES ('delete', old.id, old.date, old.transcription, old.summary, old.events, old.people, old.topics, old.planned_actions, old.meals);
 END;
 
 CREATE TRIGGER IF NOT EXISTS entries_au AFTER UPDATE ON entries BEGIN
-    INSERT INTO entries_fts(entries_fts, rowid, date, transcription, summary, events, people, topics, planned_actions)
-    VALUES ('delete', old.id, old.date, old.transcription, old.summary, old.events, old.people, old.topics, old.planned_actions);
-    INSERT INTO entries_fts(rowid, date, transcription, summary, events, people, topics, planned_actions)
-    VALUES (new.id, new.date, new.transcription, new.summary, new.events, new.people, new.topics, new.planned_actions);
+    INSERT INTO entries_fts(entries_fts, rowid, date, transcription, summary, events, people, topics, planned_actions, meals)
+    VALUES ('delete', old.id, old.date, old.transcription, old.summary, old.events, old.people, old.topics, old.planned_actions, old.meals);
+    INSERT INTO entries_fts(rowid, date, transcription, summary, events, people, topics, planned_actions, meals)
+    VALUES (new.id, new.date, new.transcription, new.summary, new.events, new.people, new.topics, new.planned_actions, new.meals);
 END;
 """
 
@@ -70,10 +72,27 @@ def get_db_path() -> Path:
     return settings.database_path
 
 
+def _migrate(conn: sqlite3.Connection):
+    """Apply migrations to existing databases before running SCHEMA."""
+    cursor = conn.execute("PRAGMA table_info(entries)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if not columns:
+        return  # Fresh DB, SCHEMA will create everything
+
+    if "meals" not in columns:
+        # Drop FTS infrastructure so it gets recreated with the new column
+        conn.execute("DROP TRIGGER IF EXISTS entries_ai")
+        conn.execute("DROP TRIGGER IF EXISTS entries_ad")
+        conn.execute("DROP TRIGGER IF EXISTS entries_au")
+        conn.execute("DROP TABLE IF EXISTS entries_fts")
+        conn.execute("ALTER TABLE entries ADD COLUMN meals TEXT NOT NULL DEFAULT '{}'")
+
+
 def init_db():
     path = get_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path) as conn:
+        _migrate(conn)
         conn.executescript(SCHEMA)
 
 

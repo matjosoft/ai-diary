@@ -98,6 +98,12 @@ async def generate_report(entries: list[dict], report_type: str) -> str:
     prompt_file = f"{report_type}_report.txt"
     system_prompt = _load_prompt(prompt_file)
 
+    def _meals_line(e: dict) -> str:
+        meals = e.get("meals") or {}
+        if not meals:
+            return ""
+        return "\nMåltider: " + ", ".join(f"{k}: {v}" for k, v in meals.items())
+
     entries_text = "\n\n".join(
         f"## {e['date']}\n"
         f"Sammanfattning: {e.get('summary', 'Saknas')}\n"
@@ -106,6 +112,7 @@ async def generate_report(entries: list[dict], report_type: str) -> str:
         f"Personer: {', '.join(e.get('people', []))}\n"
         f"Ämnen: {', '.join(e.get('topics', []))}\n"
         f"Planerade åtgärder: {', '.join(e.get('planned_actions', []))}"
+        f"{_meals_line(e)}"
         for e in entries
     )
 
