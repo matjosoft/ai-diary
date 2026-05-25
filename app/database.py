@@ -35,6 +35,30 @@ CREATE TABLE IF NOT EXISTS summaries (
     updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS photos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date DATE NOT NULL,
+    filename TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
+    caption TEXT,
+    created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_photos_date ON photos(date);
+
+CREATE TABLE IF NOT EXISTS health_data (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date DATE UNIQUE NOT NULL,
+    steps INTEGER,
+    distance_km REAL,
+    active_energy_kcal REAL,
+    flights_climbed INTEGER,
+    source TEXT NOT NULL DEFAULT 'iphone',
+    raw_data TEXT NOT NULL DEFAULT '{}',
+    created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_health_data_date ON health_data(date);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
     date,
     transcription,

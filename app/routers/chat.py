@@ -1,9 +1,39 @@
+import base64
+import mimetypes
+
 from fastapi import APIRouter
 
-from app.models import ChatRequest, ChatResponse
+from app.config import settings
+from app.models import ChatPhoto, ChatRequest, ChatResponse
 from app.services.edits import apply_edit, detect_edit, format_edit_confirmation, reanalyze_affected_entries
 from app.services.llm import chat_query
+from app.services.photos import photos_for_answer
 from app.services.search import analyze_query, smart_retrieve
+
+MAX_PHOTOS_PER_RESPONSE = 10
+
+
+def _build_chat_photos(answer: str, inline: bool) -> list[ChatPhoto]:
+    out: list[ChatPhoto] = []
+    for p in photos_for_answer(answer, limit=MAX_PHOTOS_PER_RESPONSE):
+        path = settings.photos_dir / p["filename"]
+        data_url = None
+        if inline and path.exists():
+            mime, _ = mimetypes.guess_type(p["filename"])
+            mime = mime or "image/jpeg"
+            b64 = base64.b64encode(path.read_bytes()).decode("ascii")
+            data_url = f"data:{mime};base64,{b64}"
+        out.append(
+            ChatPhoto(
+                date=p["date"],
+                filename=p["filename"],
+                description=p.get("description") or "",
+                caption=p.get("caption"),
+                data_url=data_url,
+                url=f"/api/photos/{p['filename']}",
+            )
+        )
+    return out
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -28,4 +58,12 @@ async def chat(req: ChatRequest):
     # Step 3: Generate answer with the retrieved context
     answer = await chat_query(req.question, context, req.messages or None, req.client_type)
 
-    return ChatResponse(answer=answer, entries_used=context.count("###"))
+    # Inline base64 photos for non-telegram clients (Telegram fetches separately).
+    inline_photos = req.client_type != "telegram"
+    photos = _build_chat_photos(answer, inline=inline_photos)
+
+    return ChatResponse(
+        answer=answer,
+        entries_used=context.count("###"),
+        photos=photos,
+    )

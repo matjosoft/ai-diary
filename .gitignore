@@ -11,8 +11,12 @@ __pycache__/
 # User data
 diary.db
 audio/
+photos/
 reports/
+systemlog.txt
 
 # IDE / tools
 .claude/
 docs/
+
+helath-implementation-plan.md

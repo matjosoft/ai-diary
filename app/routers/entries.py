@@ -1,4 +1,5 @@
 import json
+import mimetypes
 from datetime import date, datetime
 from pathlib import Path
 
@@ -111,3 +112,18 @@ async def get_audio(entry_date: date):
         return JSONResponse(status_code=404, content={"error": "Audio file missing"})
 
     return FileResponse(filepath, media_type="audio/mp4", filename=audio_files[0])
+
+
+photo_router = APIRouter(prefix="/api/photos", tags=["photos"])
+
+
+@photo_router.get("/{filename}")
+async def get_photo(filename: str):
+    # Prevent path traversal — only allow the literal filename
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return JSONResponse(status_code=400, content={"error": "Invalid filename"})
+    filepath = settings.photos_dir / filename
+    if not filepath.exists():
+        return JSONResponse(status_code=404, content={"error": "Photo not found"})
+    mime, _ = mimetypes.guess_type(filename)
+    return FileResponse(filepath, media_type=mime or "image/jpeg", filename=filename)

@@ -33,6 +33,24 @@ class Pipe:
     def pipes(self) -> list[dict]:
         return [{"id": "diary-assistant", "name": "Dagbokassistenten 📔"}]
 
+    @staticmethod
+    def _append_photos(answer: str, photos: list[dict]) -> str:
+        """Append photos as markdown images so Open WebUI renders them inline."""
+        lines = [answer.rstrip(), ""]
+        for p in photos:
+            src = p.get("data_url") or p.get("url") or ""
+            if not src:
+                continue
+            date_str = p.get("date", "")
+            description = (p.get("description") or "").strip()
+            alt = f"{date_str}: {description}" if description else date_str
+            alt = alt.replace("\n", " ").replace("]", "")
+            lines.append(f"![{alt}]({src})")
+            if description:
+                lines.append(f"*{date_str} — {description}*")
+            lines.append("")
+        return "\n".join(lines).rstrip()
+
     async def pipe(self, body: dict, __user__: dict = None) -> str | Generator:
         # Extract the latest user message
         messages = body.get("messages", [])
@@ -54,12 +72,16 @@ class Pipe:
         try:
             response = requests.post(
                 f"{self.valves.DIARY_API_URL}/api/chat",
-                json={"question": question, "messages": history},
+                json={"question": question, "messages": history, "client_type": "web"},
                 timeout=self.valves.REQUEST_TIMEOUT,
             )
             response.raise_for_status()
             data = response.json()
-            return data.get("answer", "Inget svar från dagboken.")
+            answer = data.get("answer", "Inget svar från dagboken.")
+            photos = data.get("photos") or []
+            if photos:
+                answer = self._append_photos(answer, photos)
+            return answer
         except requests.ConnectionError:
             return (
                 "⚠️ Kunde inte ansluta till dagboks-API:et. "

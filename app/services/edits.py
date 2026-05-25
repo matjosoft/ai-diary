@@ -2,9 +2,12 @@
 
 Flow:
 1. `detect_edit` asks the LLM whether the user's question is an edit command
-   and, if so, extracts target field, date range and old/new text.
-2. `apply_edit` runs a SQL REPLACE() over matching rows. FTS stays in sync
-   through the existing update triggers on the `entries` table.
+   and, if so, extracts mode (replace/append), target field, date range and
+   the relevant text payload.
+2. `apply_edit` dispatches to `_apply_replace` (SQL REPLACE over matching rows)
+   or `_apply_append` (concatenate new text on a specific day, creating the
+   entry if it doesn't yet exist). FTS stays in sync through the existing
+   insert/update triggers on the `entries` table.
 """
 
 import json
@@ -55,11 +58,19 @@ async def detect_edit(
 
 
 def apply_edit(cmd: EditCommand) -> tuple[int, list[str]]:
-    """Apply the edit to entries (and daily summary) matching the date range.
+    """Apply the edit to entries matching the command.
 
     Returns (rows_changed, affected_dates).
     """
-    if not (cmd.is_edit and cmd.old_text and cmd.new_text and cmd.target):
+    if not cmd.is_edit:
+        return 0, []
+    if cmd.mode == "append":
+        return _apply_append(cmd)
+    return _apply_replace(cmd)
+
+
+def _apply_replace(cmd: EditCommand) -> tuple[int, list[str]]:
+    if not (cmd.old_text and cmd.new_text and cmd.target):
         return 0, []
 
     fields: list[str] = []
@@ -107,6 +118,36 @@ def apply_edit(cmd: EditCommand) -> tuple[int, list[str]]:
     return len(affected_dates), affected_dates
 
 
+def _apply_append(cmd: EditCommand) -> tuple[int, list[str]]:
+    """Append text to a single day's entry. Create the entry if missing."""
+    if not cmd.append_text:
+        return 0, []
+
+    target_date = cmd.date_from or cmd.date_to or date.today().isoformat()
+    now = datetime.now().isoformat()
+
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT transcription FROM entries WHERE date = ?", (target_date,)
+        ).fetchone()
+        if row:
+            existing = row["transcription"] or ""
+            combined = f"{existing}\n{cmd.append_text}" if existing else cmd.append_text
+            conn.execute(
+                "UPDATE entries SET transcription = ?, updated_at = ? WHERE date = ?",
+                (combined, now, target_date),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO entries
+                    (date, audio_files, transcription, created_at, updated_at)
+                VALUES (?, '[]', ?, ?, ?)""",
+                (target_date, cmd.append_text, now, now),
+            )
+
+    return 1, [target_date]
+
+
 async def reanalyze_affected_entries(dates: list[str]):
     """Re-run LLM analysis on affected entries to refresh derived fields."""
     for entry_date in dates:
@@ -150,6 +191,12 @@ async def reanalyze_affected_entries(dates: list[str]):
 
 
 def format_edit_confirmation(cmd: EditCommand, count: int, dates: list[str]) -> str:
+    if cmd.mode == "append":
+        if count == 0:
+            return "Kunde inte lägga till — inget datum eller text att lägga till."
+        target_date = dates[0]
+        return f"La till \"{cmd.append_text}\" i anteckningen för {target_date}."
+
     if count == 0:
         return (
             f"Hittade inga anteckningar som innehåller \"{cmd.old_text}\" "

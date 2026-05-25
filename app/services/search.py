@@ -12,6 +12,7 @@ from datetime import date
 from app.database import get_connection
 from app.models import QueryIntent
 from app.services.llm import _get_client, _load_prompt
+from app.services.photos import fetch_photos_for_dates
 from app.config import settings
 
 
@@ -131,6 +132,9 @@ def _fetch_entries(
         for field in ("audio_files", "events", "people", "planned_actions", "topics"):
             entry[field] = json.loads(entry[field])
         entry["meals"] = json.loads(entry["meals"])
+    photos_by_date = fetch_photos_for_dates([e["date"] for e in entries])
+    for entry in entries:
+        entry["photos"] = photos_by_date.get(entry["date"], [])
     return entries
 
 
@@ -163,6 +167,48 @@ def _fetch_summaries(period_type: str, date_from: str | None, date_to: str | Non
         for field in ("topics", "people"):
             s[field] = json.loads(s[field])
     return summaries
+
+
+def _fetch_health(date_from: str | None, date_to: str | None, limit: int = 100) -> list[dict]:
+    """Fetch health rows within a date range."""
+    query = "SELECT * FROM health_data WHERE 1=1"
+    params: list = []
+
+    if date_from:
+        query += " AND date >= ?"
+        params.append(date_from)
+    if date_to:
+        query += " AND date <= ?"
+        params.append(date_to)
+
+    query += " ORDER BY date LIMIT ?"
+    params.append(limit)
+
+    with get_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+
+    return [dict(row) for row in rows]
+
+
+def _format_health_line(h: dict) -> str:
+    parts = []
+    if h.get("steps") is not None:
+        parts.append(f"Steg: {h['steps']}")
+    if h.get("distance_km") is not None:
+        parts.append(f"Distans: {h['distance_km']:.1f} km")
+    if h.get("active_energy_kcal") is not None:
+        parts.append(f"Aktiv energi: {h['active_energy_kcal']:.0f} kcal")
+    if h.get("flights_climbed") is not None:
+        parts.append(f"Trappor: {h['flights_climbed']}")
+    return f"**{h['date']}** — " + ", ".join(parts) if parts else f"**{h['date']}** — (ingen data)"
+
+
+def _format_health_section(rows: list[dict]) -> str | None:
+    if not rows:
+        return None
+    lines = ["## Hälsa\n"]
+    lines.extend(_format_health_line(r) for r in rows)
+    return "\n".join(lines) + "\n"
 
 
 async def smart_retrieve(intent: QueryIntent) -> str:
@@ -247,6 +293,17 @@ async def smart_retrieve(intent: QueryIntent) -> str:
             for e in entries:
                 sections.append(_format_entry(e, include_transcription=True))
 
+    # Append health rows when relevant: always for trend/summary; for
+    # lookup/detail only when the question has a date range.
+    include_health = intent.question_type in ("trend", "summary") or bool(
+        intent.date_from or intent.date_to
+    )
+    if include_health:
+        health_rows = _fetch_health(intent.date_from, intent.date_to)
+        health_section = _format_health_section(health_rows)
+        if health_section:
+            sections.append(health_section)
+
     if not sections:
         return "Inga dagboksanteckningar hittades för den angivna perioden."
 
@@ -268,6 +325,17 @@ def _format_entry(entry: dict, include_transcription: bool) -> str:
     if meals:
         meals_str = ", ".join(f"{k}: {v}" for k, v in meals.items())
         parts.append(f"Måltider: {meals_str}")
+    photos = entry.get("photos") or []
+    if photos:
+        photo_lines = []
+        for p in photos:
+            desc = (p.get("description") or "").strip() or "(ingen beskrivning)"
+            cap = (p.get("caption") or "").strip()
+            line = f"- {desc}"
+            if cap:
+                line += f" — bildtext: {cap}"
+            photo_lines.append(line)
+        parts.append("Bilder:\n" + "\n".join(photo_lines))
     if include_transcription:
         parts.append(f"Transkription: {entry.get('transcription', '')}")
     return "\n".join(parts) + "\n"

@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from telegram import Update
-from telegram.error import BadRequest
+from telegram.error import BadRequest, NetworkError, TimedOut
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -15,16 +15,56 @@ from telegram.ext import (
 )
 
 from app.config import settings
-from app.services.edits import apply_edit, detect_edit, format_edit_confirmation
+from app.services.edits import apply_edit, detect_edit, format_edit_confirmation, reanalyze_affected_entries
 from app.services.llm import chat_query
+from app.services.photos import photos_for_answer, process_photo, save_photo_bytes
 from app.services.pipeline import process_audio
 from app.services.search import analyze_query, smart_retrieve
 
 logger = logging.getLogger(__name__)
 
+
+class _TelegramNetworkErrorFilter(logging.Filter):
+    """Collapse Telegram polling network blips into a single friendly line.
+
+    Why: api.telegram.org routinely closes long-poll connections; PTB catches
+    it, logs the full traceback at ERROR, and retries. The traceback is noise.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        exc_info = record.exc_info
+        exc = exc_info[1] if exc_info else None
+        if isinstance(exc, (NetworkError, TimedOut)):
+            record.msg = "Telegram polling network blip (%s: %s) — auto-retrying."
+            record.args = (type(exc).__name__, exc)
+            record.exc_info = None
+            record.exc_text = None
+            record.levelno = logging.WARNING
+            record.levelname = "WARNING"
+        return True
+
+
 # Per-chat conversation history (chat_id -> list of message dicts)
 _chat_history: dict[int, list[dict]] = {}
 MAX_HISTORY = 6
+MAX_PHOTOS_PER_REPLY = 10
+
+
+async def _send_photos_for_answer(message, answer: str):
+    """If the answer references diary dates that have photos, send them."""
+    for p in photos_for_answer(answer, limit=MAX_PHOTOS_PER_REPLY):
+        path = settings.photos_dir / p["filename"]
+        if not path.exists():
+            logger.warning(f"Photo file missing: {path}")
+            continue
+        desc = (p.get("description") or "").strip()
+        caption = f"{p['date']}: {desc}" if desc else p["date"]
+        caption = caption[:1024]
+        try:
+            with path.open("rb") as fh:
+                await message.reply_photo(photo=fh, caption=caption)
+        except Exception:
+            logger.exception(f"Failed to send photo {path.name}")
 
 
 def _md_to_html(text: str) -> str:
@@ -145,6 +185,45 @@ async def _handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Fel vid bearbetning: {e}")
 
 
+async def _handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle photos (and image documents) — describe and attach to today's entry."""
+    if not _is_allowed(update.effective_user.id):
+        await update.message.reply_text("Du har inte behörighet att använda denna bot.")
+        return
+
+    if update.message.photo:
+        # Use the largest available size
+        photo = update.message.photo[-1]
+        suffix = "jpg"
+    elif update.message.document and (update.message.document.mime_type or "").startswith("image/"):
+        photo = update.message.document
+        suffix = (photo.file_name or "image.jpg").rsplit(".", 1)[-1]
+    else:
+        return
+
+    caption = update.message.caption
+
+    await update.message.reply_text("Tar emot bild, beskriver...")
+
+    file = await context.bot.get_file(photo.file_id)
+    data = bytes(await file.download_as_bytearray())
+    path = save_photo_bytes(data, suffix=suffix)
+    logger.info(f"Telegram: saved photo {path.name} ({len(data)} bytes)")
+
+    entry_date = datetime.now().date().isoformat()
+    try:
+        _, description = await process_photo(path, entry_date, caption=caption)
+    except Exception as e:
+        logger.exception("Error processing Telegram photo")
+        await update.message.reply_text(f"Fel vid bildbeskrivning: {e}")
+        return
+
+    if description:
+        await _reply(update.message, f"<b>Bild sparad ({entry_date})</b>\n{description}")
+    else:
+        await update.message.reply_text(f"Bild sparad ({entry_date}), men ingen beskrivning kunde genereras.")
+
+
 async def _handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text messages — chat with the diary."""
     if not _is_allowed(update.effective_user.id):
@@ -165,6 +244,8 @@ async def _handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         edit_cmd = await detect_edit(question, history or None)
         if edit_cmd.is_edit:
             count, dates = apply_edit(edit_cmd)
+            if dates:
+                await reanalyze_affected_entries(dates)
             answer = format_edit_confirmation(edit_cmd, count, dates)
         else:
             # Step 1: Analyze query
@@ -178,6 +259,8 @@ async def _handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _append_history(chat_id, "assistant", answer)
 
         await _reply(update.message, answer)
+        if not edit_cmd.is_edit:
+            await _send_photos_for_answer(update.message, answer)
 
     except Exception as e:
         logger.exception("Error handling Telegram chat")
@@ -196,11 +279,18 @@ async def start_telegram_bot():
         logger.info("TELEGRAM_BOT_TOKEN not set, skipping Telegram bot")
         return
 
+    _network_filter = _TelegramNetworkErrorFilter()
+    logging.getLogger("telegram.ext.Updater").addFilter(_network_filter)
+    logging.getLogger("telegram.ext").addFilter(_network_filter)
+
     _application = Application.builder().token(token).build()
 
     _application.add_handler(CommandHandler("start", _start_command))
     _application.add_handler(CommandHandler("clear", _clear_command))
     _application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, _handle_voice))
+    _application.add_handler(
+        MessageHandler(filters.PHOTO | filters.Document.IMAGE, _handle_photo)
+    )
     _application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _handle_text))
 
     await _application.initialize()

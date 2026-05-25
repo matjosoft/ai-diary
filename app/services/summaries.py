@@ -5,7 +5,7 @@ into LLM context windows during chat queries.
 """
 
 import json
-
+from datetime import date as _date
 from pathlib import Path
 
 from app.config import settings
@@ -43,6 +43,57 @@ def _format_meals(meals: dict) -> str:
     if not meals:
         return ""
     return ", ".join(f"{k}: {v}" for k, v in meals.items())
+
+
+def _fetch_health_rows(date_from: str, date_to: str) -> list[dict]:
+    """Fetch health rows for [date_from, date_to) — same half-open range as entries."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM health_data WHERE date >= ? AND date < ? ORDER BY date",
+            (date_from, date_to),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _health_block(health_rows: list[dict], total_days: int | None = None) -> str:
+    """Build a compact 'Hälsa (period)' block for the LLM input.
+
+    Returns an empty string when there is no data to report.
+    """
+    if not health_rows:
+        return ""
+
+    def _sum(field: str) -> float:
+        return sum(r[field] for r in health_rows if r.get(field) is not None)
+
+    def _count(field: str) -> int:
+        return sum(1 for r in health_rows if r.get(field) is not None)
+
+    steps_total = _sum("steps")
+    steps_days = _count("steps")
+    distance_total = _sum("distance_km")
+    energy_total = _sum("active_energy_kcal")
+    flights_total = _sum("flights_climbed")
+
+    def _sv_int(n: float) -> str:
+        return f"{int(n):,}".replace(",", " ")
+
+    lines = ["## Hälsa (period)"]
+    if steps_days:
+        avg = steps_total / steps_days
+        days_str = f"{steps_days}/{total_days}" if total_days else f"{steps_days}"
+        lines.append(
+            f"Steg totalt: {_sv_int(steps_total)} "
+            f"(snitt {_sv_int(avg)}/dag, {days_str} dagar med data)"
+        )
+    if _count("distance_km"):
+        lines.append(f"Distans totalt: {distance_total:.1f} km")
+    if _count("active_energy_kcal"):
+        lines.append(f"Aktiv energi: {int(energy_total)} kcal")
+    if _count("flights_climbed"):
+        lines.append(f"Trappor: {int(flights_total)}")
+
+    return "\n".join(lines) + "\n"
 
 
 async def generate_period_summary(period_type: str, period_key: str, force: bool = False) -> dict | None:
@@ -103,6 +154,13 @@ async def generate_period_summary(period_type: str, period_key: str, force: bool
         return line
 
     entries_text = "\n".join(_line(e) for e in entries)
+
+    # Health aggregation for the same period.
+    health_rows = _fetch_health_rows(date_from, date_to)
+    total_days = (_date.fromisoformat(date_to) - _date.fromisoformat(date_from)).days
+    health_text = _health_block(health_rows, total_days=total_days)
+    if health_text:
+        entries_text = entries_text + "\n\n" + health_text
 
     # Load person context
     person_info = ""

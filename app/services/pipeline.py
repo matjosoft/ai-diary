@@ -5,6 +5,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from app.database import get_connection
+from app.services.edits import apply_edit, detect_edit, reanalyze_affected_entries
 from app.services.llm import analyze_entry
 from app.services.summaries import refresh_summaries_for_date
 from app.services.transcription import transcribe
@@ -28,10 +29,43 @@ def process_audio(audio_path: Path):
         traceback.print_exc()
 
 
+def _try_append_command(audio_path: Path, transcription: str) -> bool:
+    """If transcription is an append command, apply it and attach the audio
+    to the target day. Returns True if handled, False to fall back to the
+    normal pipeline.
+    """
+    cmd = asyncio.run(detect_edit(transcription))
+    if not (cmd.is_edit and cmd.mode == "append"):
+        return False
+
+    count, dates = apply_edit(cmd)
+    if not dates:
+        return False
+
+    target_date = dates[0]
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT audio_files FROM entries WHERE date = ?", (target_date,)
+        ).fetchone()
+        files = json.loads(row["audio_files"]) if row else []
+        files.append(audio_path.name)
+        conn.execute(
+            "UPDATE entries SET audio_files = ?, updated_at = ? WHERE date = ?",
+            (json.dumps(files), datetime.now().isoformat(), target_date),
+        )
+
+    asyncio.run(reanalyze_affected_entries([target_date]))
+    print(f"Voice append routed to {target_date}: {cmd.append_text!r}")
+    return True
+
+
 def _process_audio_sync(audio_path: Path):
     print(f"Transcribing {audio_path.name}...")
     transcription = transcribe(audio_path)
     print(f"Transcription complete ({len(transcription)} chars)")
+
+    if transcription.strip() and _try_append_command(audio_path, transcription):
+        return
 
     entry_date = _date_from_filename(audio_path)
 

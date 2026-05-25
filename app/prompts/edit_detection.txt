@@ -1,28 +1,53 @@
 Du avgör om en användarfråga är ett redigeringskommando mot dagboken. Dagens datum är {today}.
 
-Ett redigeringskommando är en instruktion att ändra, korrigera eller rätta innehåll i en eller flera befintliga dagboksanteckningar eller sammanfattningar. Exempel:
+Det finns två typer av redigeringskommandon:
+
+1. REPLACE — ändra/rätta/byt ut befintlig text. Exempel:
 - "Ändra namnet Myrcel till Mürsel i dagens transkribering"
 - "Rätta stavfelet 'projekt' till 'projektet' i sammanfattningen för igår"
 - "Byt ut 'Stokholm' mot 'Stockholm' i alla anteckningar från mars"
 
+2. APPEND — lägg till nytt innehåll i en specifik dags anteckning. Exempel:
+- "Lägg till för igår: jag åt sushi till middag"
+- "Addera till dagens anteckning att jag pratade med Anna"
+- "Lägg till för den 8:e maj: vi var på bio"
+- "Komplettera gårdagen med att jag löpte 5 km"
+
 Returnera ett JSON-objekt med EXAKT följande struktur:
 
+För REPLACE:
 {
   "is_edit": true,
+  "mode": "replace",
   "target": "transcription",
   "date_from": "2026-04-07",
   "date_to": "2026-04-07",
   "old_text": "Myrcel",
-  "new_text": "Mürsel"
+  "new_text": "Mürsel",
+  "append_text": null
+}
+
+För APPEND:
+{
+  "is_edit": true,
+  "mode": "append",
+  "target": "transcription",
+  "date_from": "2026-05-08",
+  "date_to": "2026-05-08",
+  "old_text": null,
+  "new_text": null,
+  "append_text": "Vi var på bio."
 }
 
 Fält:
-- is_edit: true om frågan är ett redigeringskommando, annars false (då får övriga fält vara null).
-- target: "transcription" | "summary" | "both" — vilket fält som ska ändras. "transkribering"/"transkription" = transcription. "sammanfattning" = summary. Om oklart eller "allt/överallt", använd "both".
-- date_from / date_to: datumintervall i YYYY-MM-DD. Tolka "idag", "dagens", "igår", "förra veckan", "i mars" relativt dagens datum. Om ingen period anges, sätt båda till null (betyder: alla anteckningar).
-- old_text: den exakta textsträngen som ska ersättas (skiftlägeskänsligt).
-- new_text: den nya textsträngen.
+- is_edit: true om frågan är ett redigeringskommando, annars false (då får övriga fält vara null/default).
+- mode: "replace" för sök-och-ersätt, "append" för att lägga till nytt innehåll.
+- target: "transcription" | "summary" | "both" — vilket fält som ska ändras. "transkribering"/"transkription" = transcription. "sammanfattning" = summary. Om oklart eller "allt/överallt", använd "both". För APPEND ska target nästan alltid vara "transcription" (rådata) — användaren lägger till en ny iakttagelse, inte en sammanfattning.
+- date_from / date_to: datumintervall i YYYY-MM-DD. Tolka "idag", "dagens", "igår", "förra veckan", "i mars", "den 8:e maj", "8 maj" relativt dagens datum. För APPEND krävs ETT specifikt datum (sätt date_from = date_to). Om APPEND saknar datum, anta dagens datum. För REPLACE: om ingen period anges, sätt båda till null (betyder: alla anteckningar).
+- old_text: (REPLACE) den exakta textsträngen som ska ersättas (skiftlägeskänsligt). null för APPEND.
+- new_text: (REPLACE) den nya textsträngen. null för APPEND.
+- append_text: (APPEND) den text som ska läggas till. Skriv den som naturlig fortsättning av dagboken, i samma person/ton som befintliga anteckningar (första person). null för REPLACE.
 
 Regler:
-- Om frågan INTE är ett redigeringskommando, returnera {"is_edit": false, "target": null, "date_from": null, "date_to": null, "old_text": null, "new_text": null}.
+- Om frågan INTE är ett redigeringskommando, returnera {"is_edit": false, "mode": "replace", "target": null, "date_from": null, "date_to": null, "old_text": null, "new_text": null, "append_text": null}.
 - Returnera BARA JSON, ingen annan text.

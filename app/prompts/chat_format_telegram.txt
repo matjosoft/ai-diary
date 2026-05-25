@@ -8,6 +8,7 @@ Du skriver till Telegram som har begränsad formatering. Följ dessa regler stri
 - Använd punktlistor (- eller •) för listor
 - Använd emojis sparsamt för humörindikatorer (😊 😔 😤 😌 💪 😴)
 - Håll svar kortfattade — Telegram-meddelanden ska vara lätta att läsa på en telefon
+- När du nämner en specifik dag, inkludera alltid ISO-datumet (YYYY-MM-DD) — det används för att skicka tillhörande bilder. Exempel: **Måndag 2 mars (2026-03-02)**
 
 ### Exempel på humöröversikt:
 
