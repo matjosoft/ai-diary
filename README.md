@@ -32,12 +32,13 @@ Audio is saved and acknowledged immediately. Transcription, LLM analysis, and su
 - **Voice capture** -- receive m4a audio from an iPhone Shortcut
 - **Transcription** -- via OpenRouter audio API (configurable model)
 - **LLM analysis** -- extracts summary, mood, events, people, topics, and planned actions
+- **Photo capture** -- send images via Telegram; a vision model writes a Swedish description and attaches the photo to the day's entry
 - **Daily merging** -- multiple recordings on the same day are combined into a single entry
 - **Full-text search** -- FTS5 index over transcriptions, summaries, topics, and people
-- **Smart chat** -- ask natural language questions; a query-analysis step picks the coarsest grain of data needed (daily summaries, monthly summaries, or full transcriptions) before answering
+- **Smart chat** -- ask natural language questions; a query-analysis step picks the coarsest grain of data needed (daily summaries, monthly summaries, or full transcriptions) before answering. Photos for referenced dates are returned alongside the answer
 - **Period summaries** -- condensed monthly and yearly summaries stored in the database and used as chat context
 - **Reports** -- generate monthly and yearly summaries with mood trends, recurring topics, and narrative overviews
-- **Open WebUI integration** -- `openwebui_pipe.py` exposes the diary chat as a Pipe function ("Dagbokassistenten") inside Open WebUI
+- **Open WebUI integration** -- `openwebui_pipe.py` exposes the diary chat as a Pipe function ("Dagbokassistenten") inside Open WebUI, with inline photo rendering
 
 ## API Endpoints
 
@@ -47,6 +48,7 @@ Audio is saved and acknowledged immediately. Transcription, LLM analysis, and su
 | `GET` | `/api/entries` | List entries (`?from=YYYY-MM-DD&to=YYYY-MM-DD`) |
 | `GET` | `/api/entries/{date}` | Get a single day's entry |
 | `GET` | `/api/entries/{date}/audio` | Download audio for a date |
+| `GET` | `/api/photos/{filename}` | Download a stored photo |
 | `POST` | `/api/chat` | Ask a question about your diary |
 | `GET` | `/api/reports/monthly/{YYYY-MM}` | Monthly report |
 | `GET` | `/api/reports/yearly/{YYYY}` | Yearly report |
@@ -61,6 +63,8 @@ Audio is saved and acknowledged immediately. Transcription, LLM analysis, and su
 ```
 
 `messages` is an optional conversation history array (`[{"role": "user"|"assistant", "content": "..."}]`) used to maintain context across follow-up questions.
+
+The response includes a `photos` array with any images attached to dates referenced in the answer. For non-Telegram clients each photo carries a base64 `data_url` for inline rendering; Telegram clients get a server-relative `url` instead and fetch each image separately.
 
 ## Setup
 
@@ -114,13 +118,14 @@ app/
   database.py          # SQLite schema (entries, summaries, FTS5 index + triggers)
   models.py            # Pydantic models (including QueryIntent for smart search)
   routers/
-    entries.py         # Audio upload and entry CRUD
+    entries.py         # Audio upload, entry CRUD, photo download
     chat.py            # Natural language queries
     reports.py         # Monthly/yearly reports
   services/
     pipeline.py        # Audio processing pipeline (transcribe → analyse → summarise)
     transcription.py   # Audio-to-text
     llm.py             # LLM calls (analysis + chat)
+    photos.py          # Vision description and photo storage/retrieval
     search.py          # Smart hierarchical retrieval (query analysis + FTS + context building)
     summaries.py       # Generate and store condensed period summaries
     reports.py         # Report generation
@@ -143,4 +148,4 @@ openwebui_pipe.py      # Open WebUI Pipe function
 
 ## Privacy
 
-All data (audio, database, reports) stays on your device. Only transcription text is sent to OpenRouter for LLM processing -- raw audio is never uploaded to the LLM.
+All data (audio, photos, database, reports) stays on your device. Transcription text is sent to OpenRouter for LLM analysis, and photos are sent once to the vision model so a Swedish description can be generated -- the description is then stored locally and used for all subsequent chat context. Raw audio is never uploaded to the LLM.
