@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from pathlib import Path
 
 from openai import AsyncOpenAI
@@ -10,6 +11,13 @@ _client = None
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+SWEDISH_WEEKDAYS = ["måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag", "söndag"]
+
+
+def _today_swedish() -> str:
+    today = date.today()
+    return f"{SWEDISH_WEEKDAYS[today.weekday()]} {today.isoformat()}"
 
 
 def _get_client() -> AsyncOpenAI:
@@ -71,6 +79,8 @@ async def chat_query(
         if marker in system_prompt:
             system_prompt = system_prompt[: system_prompt.index(marker)]
         system_prompt += format_file.read_text()
+
+    system_prompt = system_prompt.replace("{today}", _today_swedish())
 
     messages = [{"role": "system", "content": system_prompt}]
 
