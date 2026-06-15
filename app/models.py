@@ -93,3 +93,11 @@ class ChatResponse(BaseModel):
     answer: str
     entries_used: int
     photos: list[ChatPhoto] = []
+    audio_url: str | None = None    # server-relative URL to fetch the audio
+    audio_label: str | None = None  # human-readable period label, e.g. "juni 2026"
+
+
+class AudioSummaryRequest(BaseModel):
+    is_audio_summary: bool
+    period_type: str | None = None  # "day" | "month" | "year" | "ytd"
+    period_key: str | None = None

@@ -13,11 +13,18 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "anthropic/claude-sonnet-4"
     PHOTO_DESCRIPTION_MODEL: str = "google/gemini-2.0-flash-exp"
 
+    # TTS — used for audio summaries (podcast/radio style)
+    TTS_MODEL: str = "openai/gpt-4o-mini-tts"
+    TTS_VOICE: str = "alloy"
+    TTS_FORMAT: str = "mp3"
+    TTS_SPEED: float = 1.0
+
     # Storage
     DATABASE_PATH: str = "./diary.db"
     AUDIO_DIR: str = "./audio"
     PHOTOS_DIR: str = "./photos"
     REPORTS_DIR: str = "./reports"
+    AUDIO_SUMMARIES_DIR: str = "./audio/summaries"
 
     # Telegram
     TELEGRAM_BOT_TOKEN: str = ""
@@ -44,6 +51,10 @@ class Settings(BaseSettings):
     @property
     def reports_dir(self) -> Path:
         return Path(self.REPORTS_DIR)
+
+    @property
+    def audio_summaries_dir(self) -> Path:
+        return Path(self.AUDIO_SUMMARIES_DIR)
 
 
 settings = Settings()

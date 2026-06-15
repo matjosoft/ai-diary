@@ -15,6 +15,10 @@ from telegram.ext import (
 )
 
 from app.config import settings
+from app.services.audio_summary import (
+    detect_audio_summary_request,
+    generate_audio_summary,
+)
 from app.services.edits import apply_edit, detect_edit, format_edit_confirmation, reanalyze_affected_entries
 from app.services.llm import chat_query
 from app.services.photos import photos_for_answer, process_photo, save_photo_bytes
@@ -134,11 +138,15 @@ async def _start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Hej! Jag är din dagboksassistent.\n\n"
         "Skicka ett röstmeddelande för att skapa en dagboksinlägg.\n"
-        "Skriv en fråga för att chatta med din dagbok.\n\n"
+        "Skriv en fråga för att chatta med din dagbok.\n"
+        "Be om en ljudsammanfattning så får du Dagboksradion som ljudfil.\n\n"
         "Exempel:\n"
         '- "Hur mådde jag förra veckan?"\n'
         '- "Vad hände i mars?"\n'
-        '- "Vilka har jag träffat senaste månaden?"'
+        '- "Ge mig en ljudsammanfattning för idag"\n'
+        '- "Gör en podcast av juni"\n'
+        "- /summary månaden\n"
+        "- /summary ytd"
     )
 
 
@@ -224,6 +232,84 @@ async def _handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Bild sparad ({entry_date}), men ingen beskrivning kunde genereras.")
 
 
+async def _send_audio_summary(message, period_type: str, period_key: str) -> str:
+    """Generate and send the audio summary; returns a text caption to show."""
+    result = await generate_audio_summary(period_type, period_key)
+    if not result.get("audio_path"):
+        return f"Inga dagboksanteckningar hittades för {result.get('label', period_key)}."
+
+    audio_path = Path(result["audio_path"])
+    caption = (
+        f"<b>Dagboksradion — {result['label']}</b>\n"
+        f"{result['entry_count']} dagboksanteckning(ar)"
+    )
+    try:
+        with audio_path.open("rb") as fh:
+            await message.reply_audio(
+                audio=fh,
+                title=f"Dagboksradion — {result['label']}",
+                performer="Dagboksradion",
+                caption=caption[:1024],
+                parse_mode="HTML",
+            )
+    except Exception:
+        logger.exception(f"Failed to send audio summary {audio_path.name}")
+        return f"Kunde inte skicka ljudfilen för {result['label']}."
+    return ""  # success — audio carries the message
+
+
+async def _summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """`/summary <period>` — generate an audio summary on demand.
+
+    Examples:
+      /summary idag
+      /summary 2026-06-13
+      /summary månaden
+      /summary 2026-06
+      /summary år
+      /summary 2026
+      /summary ytd
+    """
+    if not _is_allowed(update.effective_user.id):
+        return
+
+    args_text = " ".join(context.args).strip() if context.args else ""
+    if not args_text:
+        await update.message.reply_text(
+            "Användning: /summary <period>\n\n"
+            "Exempel:\n"
+            "  /summary idag\n"
+            "  /summary 2026-06-13\n"
+            "  /summary månaden\n"
+            "  /summary 2026-06\n"
+            "  /summary ytd\n"
+            "  /summary 2026"
+        )
+        return
+
+    await update.message.reply_text(
+        f"Genererar Dagboksradion för \"{args_text}\"... det här kan ta en stund."
+    )
+    await context.bot.send_chat_action(
+        chat_id=update.effective_chat.id, action="record_voice"
+    )
+
+    try:
+        # Reuse the LLM-based detector for natural-language period parsing.
+        intent = await detect_audio_summary_request(args_text)
+        if not (intent.is_audio_summary and intent.period_type and intent.period_key):
+            await update.message.reply_text(
+                "Förstod inte perioden. Försök med t.ex. 'idag', '2026-06', 'ytd' eller '2026'."
+            )
+            return
+        err = await _send_audio_summary(update.message, intent.period_type, intent.period_key)
+        if err:
+            await update.message.reply_text(err)
+    except Exception as e:
+        logger.exception("Error generating audio summary via /summary")
+        await update.message.reply_text(f"Fel: {e}")
+
+
 async def _handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text messages — chat with the diary."""
     if not _is_allowed(update.effective_user.id):
@@ -240,7 +326,25 @@ async def _handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     try:
-        # Step 0: Edit/correction command?
+        # Step 0a: Audio summary request?
+        audio_req = await detect_audio_summary_request(question, history or None)
+        if audio_req.is_audio_summary and audio_req.period_type and audio_req.period_key:
+            await update.message.reply_text(
+                "Genererar Dagboksradion... det här kan ta en stund."
+            )
+            await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
+            err = await _send_audio_summary(
+                update.message, audio_req.period_type, audio_req.period_key
+            )
+            if err:
+                await update.message.reply_text(err)
+            _append_history(chat_id, "user", question)
+            _append_history(
+                chat_id, "assistant", f"[Skickade ljudsammanfattning för {audio_req.period_key}]"
+            )
+            return
+
+        # Step 0b: Edit/correction command?
         edit_cmd = await detect_edit(question, history or None)
         if edit_cmd.is_edit:
             count, dates = apply_edit(edit_cmd)
@@ -287,6 +391,7 @@ async def start_telegram_bot():
 
     _application.add_handler(CommandHandler("start", _start_command))
     _application.add_handler(CommandHandler("clear", _clear_command))
+    _application.add_handler(CommandHandler("summary", _summary_command))
     _application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, _handle_voice))
     _application.add_handler(
         MessageHandler(filters.PHOTO | filters.Document.IMAGE, _handle_photo)

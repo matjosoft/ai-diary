@@ -1,10 +1,15 @@
 import base64
 import mimetypes
+from pathlib import Path
 
 from fastapi import APIRouter
 
 from app.config import settings
 from app.models import ChatPhoto, ChatRequest, ChatResponse
+from app.services.audio_summary import (
+    detect_audio_summary_request,
+    generate_audio_summary,
+)
 from app.services.edits import apply_edit, detect_edit, format_edit_confirmation, reanalyze_affected_entries
 from app.services.llm import chat_query
 from app.services.photos import photos_for_answer
@@ -35,12 +40,34 @@ def _build_chat_photos(answer: str, inline: bool) -> list[ChatPhoto]:
         )
     return out
 
+
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
 @router.post("")
 async def chat(req: ChatRequest):
-    # Step 0: Is this an edit/correction command? If so, execute and return.
+    # Step 0a: Did the user ask for a podcast/radio-style audio summary?
+    audio_req = await detect_audio_summary_request(req.question, req.messages or None)
+    if audio_req.is_audio_summary and audio_req.period_type and audio_req.period_key:
+        result = await generate_audio_summary(audio_req.period_type, audio_req.period_key)
+        if result.get("audio_path"):
+            audio_path = result["audio_path"]
+            answer = (
+                f"Här kommer Dagboksradion för {result['label']} — "
+                f"{result['entry_count']} dagboksanteckning(ar) sammanfattade."
+            )
+            return ChatResponse(
+                answer=answer,
+                entries_used=result["entry_count"],
+                audio_url=f"/api/audio-summaries/file/{Path(audio_path).name}",
+                audio_label=result["label"],
+            )
+        return ChatResponse(
+            answer=f"Inga dagboksanteckningar hittades för {result.get('label', audio_req.period_key)}.",
+            entries_used=0,
+        )
+
+    # Step 0b: Edit/correction command?
     edit_cmd = await detect_edit(req.question, req.messages or None)
     if edit_cmd.is_edit:
         count, dates = apply_edit(edit_cmd)

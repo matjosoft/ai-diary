@@ -19,7 +19,11 @@ class Pipe:
     class Valves(BaseModel):
         DIARY_API_URL: str = Field(
             default="http://host.docker.internal:8000",
-            description="Base URL of the AI Diary FastAPI server (use host.docker.internal to reach the host from inside Docker)",
+            description="Base URL of the AI Diary FastAPI server, as seen from the Open WebUI backend (use host.docker.internal to reach the host from inside Docker)",
+        )
+        PUBLIC_DIARY_URL: str = Field(
+            default="",
+            description="Public, browser-reachable base URL of the diary API. Used when building audio links the user's browser opens. Leave empty to fall back to DIARY_API_URL.",
         )
         REQUEST_TIMEOUT: int = Field(
             default=120,
@@ -51,6 +55,27 @@ class Pipe:
             lines.append("")
         return "\n".join(lines).rstrip()
 
+    def _append_audio(self, answer: str, audio_url: str | None, label: str | None) -> str:
+        """Append a browser-openable link to the rendered audio file.
+
+        Open WebUI sanitises raw <audio> HTML and refuses to navigate to
+        data: URLs from links, so we use the diary API's file endpoint and
+        let the browser open it (it shows an inline player for MP3).
+        """
+        if not audio_url:
+            return answer
+        public_base = (
+            self.valves.PUBLIC_DIARY_URL.strip() or self.valves.DIARY_API_URL
+        ).rstrip("/")
+        full = f"{public_base}{audio_url}"
+        title = f"Dagboksradion — {label}" if label else "Dagboksradion"
+        return "\n".join([
+            answer.rstrip(),
+            "",
+            f"🎙️ **{title}**",
+            f"[▶ Lyssna]({full})",
+        ]).rstrip()
+
     async def pipe(self, body: dict, __user__: dict = None) -> str | Generator:
         # Extract the latest user message
         messages = body.get("messages", [])
@@ -81,6 +106,9 @@ class Pipe:
             photos = data.get("photos") or []
             if photos:
                 answer = self._append_photos(answer, photos)
+            audio_url = data.get("audio_url")
+            if audio_url:
+                answer = self._append_audio(answer, audio_url, data.get("audio_label"))
             return answer
         except requests.ConnectionError:
             return (

@@ -1,0 +1,45 @@
+Du analyserar om användarens fråga är en begäran om en LJUDSAMMANFATTNING (podcast/radioprogram) av dagboken.
+
+Dagens datum: {today}
+
+Returnera ett JSON-objekt med följande fält:
+{
+  "is_audio_summary": bool,
+  "period_type": "day" | "month" | "year" | "ytd" | null,
+  "period_key": string | null
+}
+
+Regler för period_key:
+- day: "YYYY-MM-DD"
+- month: "YYYY-MM"
+- year: "YYYY"
+- ytd ("year-to-date" / "året så här långt"): "YYYY"
+
+Tolka relativa uttryck utifrån dagens datum:
+- "idag", "dagens" → day med dagens datum
+- "igår", "gårdagens" → day med gårdagens datum
+- "i förrgår" → day två dagar tillbaka
+- "denna månad", "den här månaden", "månaden" → month med innevarande månad
+- "förra månaden" → month med föregående månad
+- "i år", "året så här långt", "året hittills" → ytd med innevarande år
+- "förra året" → year med föregående år
+- explicit datum/månad/år → använd det
+
+Sätt is_audio_summary = true endast när användaren ber om något som ska LYSSNAS på — t.ex. "ljudsammanfattning", "podcast", "podd", "radioshow", "radioprogram", "spela upp en sammanfattning", "läs upp", "audio summary", "play me", "make a podcast", etc. En vanlig fråga om dagboken eller en textsammanfattning är INTE en ljudsammanfattning.
+
+Om is_audio_summary = false, sätt övriga fält till null.
+
+Returnera BARA JSON, ingen annan text.
+
+Exempel:
+Användare: "Ge mig en ljudsammanfattning för idag"
+→ {"is_audio_summary": true, "period_type": "day", "period_key": "{today}"}
+
+Användare: "Gör en podcast av juni"
+→ {"is_audio_summary": true, "period_type": "month", "period_key": "<innevarande år>-06"}
+
+Användare: "Sammanfatta året så här långt som ett radioprogram"
+→ {"is_audio_summary": true, "period_type": "ytd", "period_key": "<innevarande år>"}
+
+Användare: "Hur mådde jag förra veckan?"
+→ {"is_audio_summary": false, "period_type": null, "period_key": null}

@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import backfill_fts, init_db
-from app.routers import chat, entries, health, reports
+from app.routers import audio_summaries, chat, entries, health, reports
 from app.routers.entries import photo_router
 from app.services.telegram import start_telegram_bot, stop_telegram_bot
 
@@ -16,6 +16,7 @@ async def lifespan(app: FastAPI):
     settings.audio_dir.mkdir(parents=True, exist_ok=True)
     settings.photos_dir.mkdir(parents=True, exist_ok=True)
     settings.reports_dir.mkdir(parents=True, exist_ok=True)
+    settings.audio_summaries_dir.mkdir(parents=True, exist_ok=True)
     init_db()
     backfill_fts()
     await start_telegram_bot()
@@ -30,6 +31,7 @@ app.include_router(photo_router)
 app.include_router(chat.router)
 app.include_router(reports.router)
 app.include_router(health.router)
+app.include_router(audio_summaries.router)
 
 
 @app.exception_handler(RequestValidationError)
