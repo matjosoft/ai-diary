@@ -232,9 +232,11 @@ async def _handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Bild sparad ({entry_date}), men ingen beskrivning kunde genereras.")
 
 
-async def _send_audio_summary(message, period_type: str, period_key: str) -> str:
+async def _send_audio_summary(
+    message, period_type: str, period_key: str, style: str | None = None
+) -> str:
     """Generate and send the audio summary; returns a text caption to show."""
-    result = await generate_audio_summary(period_type, period_key)
+    result = await generate_audio_summary(period_type, period_key, style=style)
     if not result.get("audio_path"):
         return f"Inga dagboksanteckningar hittades för {result.get('label', period_key)}."
 
@@ -276,14 +278,17 @@ async def _summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args_text = " ".join(context.args).strip() if context.args else ""
     if not args_text:
         await update.message.reply_text(
-            "Användning: /summary <period>\n\n"
+            "Användning: /summary <period> [stil]\n\n"
             "Exempel:\n"
             "  /summary idag\n"
             "  /summary 2026-06-13\n"
             "  /summary månaden\n"
             "  /summary 2026-06\n"
             "  /summary ytd\n"
-            "  /summary 2026"
+            "  /summary 2026\n\n"
+            "Stilar (valfritt): sakligt (bara fakta) eller roasta (skämtsamt).\n"
+            "  /summary roasta igår\n"
+            "  /summary sakligt 2026-06"
         )
         return
 
@@ -302,7 +307,9 @@ async def _summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Förstod inte perioden. Försök med t.ex. 'idag', '2026-06', 'ytd' eller '2026'."
             )
             return
-        err = await _send_audio_summary(update.message, intent.period_type, intent.period_key)
+        err = await _send_audio_summary(
+            update.message, intent.period_type, intent.period_key, style=intent.style
+        )
         if err:
             await update.message.reply_text(err)
     except Exception as e:
@@ -334,7 +341,10 @@ async def _handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
             err = await _send_audio_summary(
-                update.message, audio_req.period_type, audio_req.period_key
+                update.message,
+                audio_req.period_type,
+                audio_req.period_key,
+                style=audio_req.style,
             )
             if err:
                 await update.message.reply_text(err)

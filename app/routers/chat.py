@@ -49,7 +49,9 @@ async def chat(req: ChatRequest):
     # Step 0a: Did the user ask for a podcast/radio-style audio summary?
     audio_req = await detect_audio_summary_request(req.question, req.messages or None)
     if audio_req.is_audio_summary and audio_req.period_type and audio_req.period_key:
-        result = await generate_audio_summary(audio_req.period_type, audio_req.period_key)
+        result = await generate_audio_summary(
+            audio_req.period_type, audio_req.period_key, style=audio_req.style
+        )
         if result.get("audio_path"):
             audio_path = result["audio_path"]
             answer = (

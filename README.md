@@ -59,7 +59,7 @@ Audio is saved and acknowledged immediately. Transcription, LLM analysis, and su
 | `GET` | `/api/audio-summaries/ytd/{YYYY}` | Audio summary for the year so far |
 | `GET` | `/api/audio-summaries/file/{filename}` | Download a rendered audio file |
 
-The audio-summary endpoints accept `?format=json|script|audio` (default `json`, returns metadata + script + a relative `audio_url`) and `?force=true` to regenerate.
+The audio-summary endpoints accept `?format=json|script|audio` (default `json`, returns metadata + script + a relative `audio_url`), `?style=default|factual|roasting` (host tone — defaults to `AUDIO_SUMMARY_STYLE` in `.env`), and `?force=true` to regenerate.
 
 ### Chat request format
 
@@ -147,8 +147,10 @@ app/
   prompts/             # LLM prompt templates
     chat_query.txt          # System prompt for chat answers
     query_analysis.txt      # System prompt for query intent analysis
-    audio_summary.txt       # "Dagboksradion" host persona + show structure
-    audio_summary_detect.txt # Intent detector for audio-summary requests
+    audio_summary.txt       # "Dagboksradion" host persona + show structure (default style)
+    audio_summary_factual.txt  # Neutral, fact-only host style
+    audio_summary_roasting.txt # Sarcastic, joking roast host style
+    audio_summary_detect.txt # Intent detector for audio-summary requests (period + style)
 openwebui_pipe.py      # Open WebUI Pipe function
 ```
 
@@ -165,10 +167,20 @@ openwebui_pipe.py      # Open WebUI Pipe function
 
 ## How Audio Summaries Work
 
-1. When the user asks for a "ljudsammanfattning" / "podd" / "radioshow" (or uses `/summary` in Telegram), an LLM intent detector (`audio_summary_detect.txt`) resolves the period — `day` / `month` / `year` / `ytd` — and a concrete `period_key`, handling Swedish relative phrases like "idag", "förra månaden", "året så här långt".
-2. `audio_summary.py` fetches the matching entries plus aggregated health data and feeds them to the LLM with the `audio_summary.txt` prompt — a "Dagboksradion" host persona with a 10-segment show structure (cold open → headlines → events → mood → people → topics → body & movement → meals → planned items → outro) and length targets per period (2–4 min for a day, up to ~18 min for a full year).
+1. When the user asks for a "ljudsammanfattning" / "podd" / "radioshow" (or uses `/summary` in Telegram), an LLM intent detector (`audio_summary_detect.txt`) resolves the period — `day` / `month` / `year` / `ytd` — and a concrete `period_key`, handling Swedish relative phrases like "idag", "förra månaden", "året så här långt". It also detects an optional **host style** from phrases like "roasta mig" or "bara fakta".
+2. `audio_summary.py` fetches the matching entries plus aggregated health data and feeds them to the LLM with the style's prompt — a "Dagboksradion" host persona with a 10-segment show structure (cold open → headlines → events → mood → people → topics → body & movement → meals → planned items → outro) and length targets per period (2–4 min for a day, up to ~18 min for a full year).
 3. The resulting spoken-Swedish script (no markdown, written-out numbers/dates, pause cues) is rendered to MP3 via OpenRouter's `/audio/speech` endpoint (`tts.py`), chunked on paragraph boundaries when the script exceeds the per-request character cap.
-4. Both the script (`.md`) and the audio file are cached under `audio/summaries/`. Pass `?force=true` to regenerate.
+4. Both the script (`.md`) and the audio file are cached under `audio/summaries/` (style-suffixed for non-default styles, e.g. `month-2026-06-roasting.mp3`). Pass `?force=true` to regenerate.
+
+### Host styles
+
+Audio summaries come in three tones, selectable per request or set as the default via `AUDIO_SUMMARY_STYLE` in `.env`. The resolution order is **per-request style → `AUDIO_SUMMARY_STYLE` → built-in `default`**.
+
+- **`default`** — warm, personal "Sommar i P1"-style host with nicknames and reflection.
+- **`factual`** — neutral, fact-only reading with no personal touch, like a news recap.
+- **`roasting`** — sarcastic, joking, on-the-edge roast (still grounded only in real entries).
+
+Set the style via the `?style=default|factual|roasting` query param on the HTTP endpoints, by asking in natural language in chat/Telegram ("roasta gårdagen", "ge mig en saklig sammanfattning av juni"), or change the default in `.env`.
 
 Configure the TTS model and voice via `TTS_MODEL`, `TTS_VOICE`, `TTS_FORMAT`, and `TTS_SPEED` in `.env`. Discover speech-capable models via the OpenRouter Models page (filter on speech output) or the Models API with `output_modalities=speech`.
 

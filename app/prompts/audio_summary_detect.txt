@@ -6,7 +6,8 @@ Returnera ett JSON-objekt med följande fält:
 {
   "is_audio_summary": bool,
   "period_type": "day" | "month" | "year" | "ytd" | null,
-  "period_key": string | null
+  "period_key": string | null,
+  "style": "default" | "factual" | "roasting" | null
 }
 
 Regler för period_key:
@@ -14,6 +15,12 @@ Regler för period_key:
 - month: "YYYY-MM"
 - year: "YYYY"
 - ytd ("year-to-date" / "året så här långt"): "YYYY"
+
+Regler för style (vilken ton programmet ska ha):
+- "factual": användaren ber om en saklig, neutral, faktabaserad sammanfattning utan personlig touch — t.ex. "sakligt", "bara fakta", "neutralt", "torrt", "utan känslor", "som en nyhetsuppläsning".
+- "roasting": användaren ber om en sarkastisk, skämtsam, raljant roast — t.ex. "roasta mig", "driv med mig", "häckla mig", "sarkastiskt", "skämtsamt", "roast".
+- "default": användaren ber uttryckligen om den vanliga varma/personliga tonen.
+- null: ingen ton anges uttryckligen (då används standardtonen automatiskt).
 
 Tolka relativa uttryck utifrån dagens datum:
 - "idag", "dagens" → day med dagens datum
@@ -33,13 +40,16 @@ Returnera BARA JSON, ingen annan text.
 
 Exempel:
 Användare: "Ge mig en ljudsammanfattning för idag"
-→ {"is_audio_summary": true, "period_type": "day", "period_key": "{today}"}
+→ {"is_audio_summary": true, "period_type": "day", "period_key": "{today}", "style": null}
 
 Användare: "Gör en podcast av juni"
-→ {"is_audio_summary": true, "period_type": "month", "period_key": "<innevarande år>-06"}
+→ {"is_audio_summary": true, "period_type": "month", "period_key": "<innevarande år>-06", "style": null}
 
-Användare: "Sammanfatta året så här långt som ett radioprogram"
-→ {"is_audio_summary": true, "period_type": "ytd", "period_key": "<innevarande år>"}
+Användare: "Roasta min vecka, gör en podd av igår"
+→ {"is_audio_summary": true, "period_type": "day", "period_key": "<gårdagens datum>", "style": "roasting"}
+
+Användare: "Sammanfatta året så här långt som ett sakligt radioprogram, bara fakta"
+→ {"is_audio_summary": true, "period_type": "ytd", "period_key": "<innevarande år>", "style": "factual"}
 
 Användare: "Hur mådde jag förra veckan?"
-→ {"is_audio_summary": false, "period_type": null, "period_key": null}
+→ {"is_audio_summary": false, "period_type": null, "period_key": null, "style": null}

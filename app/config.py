@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     TTS_FORMAT: str = "mp3"
     TTS_SPEED: float = 1.0
 
+    # Audio summary host style — "default" | "factual" | "roasting".
+    # Overridable per request; this is the fallback when none is given.
+    AUDIO_SUMMARY_STYLE: str = "default"
+
     # Storage
     DATABASE_PATH: str = "./diary.db"
     AUDIO_DIR: str = "./audio"

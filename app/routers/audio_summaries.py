@@ -20,16 +20,21 @@ async def _respond(
     period_key: str,
     format: str,
     force: bool,
+    style: str | None = None,
 ):
     if format == "script":
-        result = await generate_script(period_type, period_key, force=force)
+        result = await generate_script(
+            period_type, period_key, style=style, force=force
+        )
         if result["script"] is None:
             return JSONResponse(
                 status_code=404, content={"error": "No entries for this period"}
             )
         return PlainTextResponse(result["script"])
 
-    result = await generate_audio_summary(period_type, period_key, force=force)
+    result = await generate_audio_summary(
+        period_type, period_key, style=style, force=force
+    )
     if result.get("audio_path") is None:
         return JSONResponse(
             status_code=404, content={"error": "No entries for this period"}
@@ -45,6 +50,7 @@ async def _respond(
     return {
         "period_type": result["period_type"],
         "period_key": result["period_key"],
+        "style": result["style"],
         "label": result["label"],
         "entry_count": result["entry_count"],
         "script": result["script"],
@@ -52,19 +58,24 @@ async def _respond(
     }
 
 
+_STYLE_PATTERN = "^(default|factual|roasting)$"
+
+
 @router.get("/day/{entry_date}")
 async def day_summary(
     entry_date: str,
     format: str = Query("json", pattern="^(json|script|audio)$"),
+    style: str | None = Query(None, pattern=_STYLE_PATTERN),
     force: bool = Query(False),
 ):
-    return await _respond("day", entry_date, format, force)
+    return await _respond("day", entry_date, format, force, style)
 
 
 @router.get("/month/{year_month}")
 async def month_summary(
     year_month: str,
     format: str = Query("json", pattern="^(json|script|audio)$"),
+    style: str | None = Query(None, pattern=_STYLE_PATTERN),
     force: bool = Query(False),
 ):
     try:
@@ -72,25 +83,27 @@ async def month_summary(
         int(y); int(m)
     except ValueError:
         return JSONResponse(status_code=400, content={"error": "Use format YYYY-MM"})
-    return await _respond("month", year_month, format, force)
+    return await _respond("month", year_month, format, force, style)
 
 
 @router.get("/year/{year}")
 async def year_summary(
     year: int,
     format: str = Query("json", pattern="^(json|script|audio)$"),
+    style: str | None = Query(None, pattern=_STYLE_PATTERN),
     force: bool = Query(False),
 ):
-    return await _respond("year", str(year), format, force)
+    return await _respond("year", str(year), format, force, style)
 
 
 @router.get("/ytd/{year}")
 async def year_to_date_summary(
     year: int,
     format: str = Query("json", pattern="^(json|script|audio)$"),
+    style: str | None = Query(None, pattern=_STYLE_PATTERN),
     force: bool = Query(False),
 ):
-    return await _respond("ytd", str(year), format, force)
+    return await _respond("ytd", str(year), format, force, style)
 
 
 @router.get("/file/{filename}")

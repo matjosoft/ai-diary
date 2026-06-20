@@ -101,3 +101,4 @@ class AudioSummaryRequest(BaseModel):
     is_audio_summary: bool
     period_type: str | None = None  # "day" | "month" | "year" | "ytd"
     period_key: str | None = None
+    style: str | None = None  # "default" | "factual" | "roasting"; None => fallback

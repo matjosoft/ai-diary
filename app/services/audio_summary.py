@@ -22,6 +22,26 @@ SWEDISH_MONTHS = [
     "juli", "augusti", "september", "oktober", "november", "december",
 ]
 
+# Host styles -> prompt file. "default" is the original warm radio host.
+AUDIO_SUMMARY_STYLES = {
+    "default": "audio_summary.txt",
+    "factual": "audio_summary_factual.txt",
+    "roasting": "audio_summary_roasting.txt",
+}
+DEFAULT_STYLE = "default"
+
+
+def _resolve_style(style: str | None) -> str:
+    """Pick the host style: explicit request > .env default > built-in default."""
+    if style:
+        s = style.strip().lower()
+        if s in AUDIO_SUMMARY_STYLES:
+            return s
+    configured = (settings.AUDIO_SUMMARY_STYLE or "").strip().lower()
+    if configured in AUDIO_SUMMARY_STYLES:
+        return configured
+    return DEFAULT_STYLE
+
 
 def _period_label(period_type: str, period_key: str) -> str:
     """Human-readable Swedish label for a period — read aloud by the host."""
@@ -92,10 +112,17 @@ def _format_entries_for_script(entries: list[dict]) -> str:
     return "\n\n".join(blocks)
 
 
-def _paths_for(period_type: str, period_key: str) -> tuple[Path, Path]:
-    """Cached script (.md) and audio file paths for this period."""
+def _paths_for(period_type: str, period_key: str, style: str) -> tuple[Path, Path]:
+    """Cached script (.md) and audio file paths for this period + style.
+
+    The default style keeps its original (style-less) filenames so existing
+    caches stay valid; other styles get a `-{style}` suffix.
+    """
     settings.audio_summaries_dir.mkdir(parents=True, exist_ok=True)
-    base = settings.audio_summaries_dir / f"{period_type}-{period_key}"
+    name = f"{period_type}-{period_key}"
+    if style != DEFAULT_STYLE:
+        name += f"-{style}"
+    base = settings.audio_summaries_dir / name
     ext = settings.TTS_FORMAT.lower()
     return base.with_suffix(".md"), base.with_suffix(f".{ext}")
 
@@ -103,13 +130,17 @@ def _paths_for(period_type: str, period_key: str) -> tuple[Path, Path]:
 async def generate_script(
     period_type: str,
     period_key: str,
+    style: str | None = None,
     force: bool = False,
 ) -> dict:
     """Build the spoken script for a period. Returns dict with script + meta.
 
-    Cached to disk; pass force=True to regenerate.
+    `style` selects the host persona ("default" | "factual" | "roasting");
+    None falls back to the .env default. Cached to disk per style; pass
+    force=True to regenerate.
     """
-    script_path, _ = _paths_for(period_type, period_key)
+    style = _resolve_style(style)
+    script_path, _ = _paths_for(period_type, period_key, style)
 
     date_from, date_to = _date_range(period_type, period_key)
 
@@ -123,6 +154,7 @@ async def generate_script(
         return {
             "period_type": period_type,
             "period_key": period_key,
+            "style": style,
             "label": _period_label(period_type, period_key),
             "script": None,
             "entry_count": 0,
@@ -132,6 +164,7 @@ async def generate_script(
         return {
             "period_type": period_type,
             "period_key": period_key,
+            "style": style,
             "label": _period_label(period_type, period_key),
             "script": script_path.read_text(),
             "entry_count": len(rows),
@@ -166,7 +199,7 @@ async def generate_script(
         user_msg_parts.extend(["", health_text])
     user_msg = "\n".join(user_msg_parts)
 
-    system_prompt = _load_prompt("audio_summary.txt")
+    system_prompt = _load_prompt(AUDIO_SUMMARY_STYLES[style])
 
     client = _get_client()
     response = await client.chat.completions.create(
@@ -184,6 +217,7 @@ async def generate_script(
     return {
         "period_type": period_type,
         "period_key": period_key,
+        "style": style,
         "label": label,
         "script": script,
         "entry_count": len(entries),
@@ -194,12 +228,16 @@ async def generate_script(
 async def generate_audio_summary(
     period_type: str,
     period_key: str,
+    style: str | None = None,
     force: bool = False,
 ) -> dict:
     """Produce both script and audio for the period. Returns paths + meta."""
-    script_path, audio_path = _paths_for(period_type, period_key)
+    style = _resolve_style(style)
+    script_path, audio_path = _paths_for(period_type, period_key, style)
 
-    script_result = await generate_script(period_type, period_key, force=force)
+    script_result = await generate_script(
+        period_type, period_key, style=style, force=force
+    )
     if script_result["script"] is None:
         return script_result | {"audio_path": None}
 
