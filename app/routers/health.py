@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.database import get_connection
 from app.models import HealthDataRequest, HealthDataResponse
+from app.services.health import save_health_data
 
 router = APIRouter(prefix="/api/health", tags=["health"])
 
@@ -27,39 +28,11 @@ def _row_to_health(row) -> HealthDataResponse:
 
 @router.post("")
 async def receive_health(payload: HealthDataRequest):
-    with get_connection() as conn:
-        existed = conn.execute(
-            "SELECT 1 FROM health_data WHERE date = ?",
-            (payload.date.isoformat(),),
-        ).fetchone()
-
-        conn.execute(
-            "INSERT INTO health_data "
-            "(date, steps, distance_km, active_energy_kcal, flights_climbed, source, raw_data, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now')) "
-            "ON CONFLICT(date) DO UPDATE SET "
-            "steps=excluded.steps, "
-            "distance_km=excluded.distance_km, "
-            "active_energy_kcal=excluded.active_energy_kcal, "
-            "flights_climbed=excluded.flights_climbed, "
-            "source=excluded.source, "
-            "raw_data=excluded.raw_data, "
-            "updated_at=datetime('now')",
-            (
-                payload.date.isoformat(),
-                payload.steps,
-                payload.distance_km,
-                payload.active_energy_kcal,
-                payload.flights_climbed,
-                payload.source,
-                json.dumps(payload.raw_data, ensure_ascii=False),
-            ),
-        )
-
+    action = save_health_data(payload)
     return {
         "status": "ok",
         "date": payload.date.isoformat(),
-        "action": "updated" if existed else "inserted",
+        "action": action,
     }
 
 

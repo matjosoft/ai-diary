@@ -20,6 +20,11 @@ from app.services.audio_summary import (
     generate_audio_summary,
 )
 from app.services.edits import apply_edit, detect_edit, format_edit_confirmation, reanalyze_affected_entries
+from app.services.health import (
+    format_health_confirmation,
+    parse_health_message,
+    save_health_data,
+)
 from app.services.llm import chat_query
 from app.services.photos import photos_for_answer, process_photo, save_photo_bytes
 from app.services.pipeline import process_audio
@@ -329,6 +334,21 @@ async def _handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = update.effective_chat.id
     history = _get_history(chat_id)
+
+    # Step 0: Health-data snapshot pasted as a JSON message (the iPhone Shortcut
+    # builds the JSON; you paste it into the chat). Cheap synchronous check —
+    # do it before touching the LLM or chat action.
+    health_payload = parse_health_message(question)
+    if health_payload is not None:
+        try:
+            action = await asyncio.get_event_loop().run_in_executor(
+                None, save_health_data, health_payload
+            )
+            await _reply(update.message, format_health_confirmation(health_payload, action))
+        except Exception as e:
+            logger.exception("Error saving Telegram health data")
+            await update.message.reply_text(f"Fel vid lagring av hälsodata: {e}")
+        return
 
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 

@@ -203,7 +203,7 @@ async def generate_script(
 
     client = _get_client()
     response = await client.chat.completions.create(
-        model=settings.LLM_MODEL,
+        model=settings.podcast_model,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_msg},

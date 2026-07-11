@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     LLM_MODEL: str = "anthropic/claude-sonnet-4"
     PHOTO_DESCRIPTION_MODEL: str = "google/gemini-2.0-flash-exp"
+    # Model for podcast/radio-style audio summary scripts.
+    # Leave empty to fall back to LLM_MODEL (see podcast_model).
+    PODCAST_MODEL: str = ""
 
     # TTS — used for audio summaries (podcast/radio style)
     TTS_MODEL: str = "openai/gpt-4o-mini-tts"
@@ -39,6 +42,11 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @property
+    def podcast_model(self) -> str:
+        """Model used for podcast audio summaries; defaults to LLM_MODEL."""
+        return self.PODCAST_MODEL.strip() or self.LLM_MODEL
 
     @property
     def database_path(self) -> Path:

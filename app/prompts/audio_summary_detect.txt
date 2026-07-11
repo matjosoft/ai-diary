@@ -17,10 +17,11 @@ Regler för period_key:
 - ytd ("year-to-date" / "året så här långt"): "YYYY"
 
 Regler för style (vilken ton programmet ska ha):
-- "factual": användaren ber om en saklig, neutral, faktabaserad sammanfattning utan personlig touch — t.ex. "sakligt", "bara fakta", "neutralt", "torrt", "utan känslor", "som en nyhetsuppläsning".
-- "roasting": användaren ber om en sarkastisk, skämtsam, raljant roast — t.ex. "roasta mig", "driv med mig", "häckla mig", "sarkastiskt", "skämtsamt", "roast".
-- "default": användaren ber uttryckligen om den vanliga varma/personliga tonen.
-- null: ingen ton anges uttryckligen (då används standardtonen automatiskt).
+- style avgörs ENBART av den AKTUELLA frågan (det sista användarmeddelandet). Ärv ALDRIG en ton från tidigare frågor — även om en tidigare fråga bad om t.ex. en roast så ska style vara null om den aktuella frågan inte själv ber om en ton.
+- "factual": den aktuella frågan ber om en saklig, neutral, faktabaserad sammanfattning utan personlig touch — t.ex. "sakligt", "bara fakta", "neutralt", "torrt", "utan känslor", "som en nyhetsuppläsning".
+- "roasting": den aktuella frågan ber om en sarkastisk, skämtsam, raljant roast — t.ex. "roasta mig", "driv med mig", "häckla mig", "sarkastiskt", "skämtsamt", "roast".
+- "default": den aktuella frågan ber uttryckligen om den vanliga varma/personliga tonen.
+- null: den aktuella frågan anger ingen ton uttryckligen (då används standardtonen automatiskt).
 
 Tolka relativa uttryck utifrån dagens datum:
 - "idag", "dagens" → day med dagens datum
@@ -53,3 +54,13 @@ Användare: "Sammanfatta året så här långt som ett sakligt radioprogram, bar
 
 Användare: "Hur mådde jag förra veckan?"
 → {"is_audio_summary": false, "period_type": null, "period_key": null, "style": null}
+
+Tidigare frågor:
+- Roasta gårdagens podd
+Användare: "Vad hände igår?"
+→ {"is_audio_summary": false, "period_type": null, "period_key": null, "style": null}
+
+Tidigare frågor:
+- Roasta gårdagens podd
+Användare: "Gör en podd av idag"
+→ {"is_audio_summary": true, "period_type": "day", "period_key": "{today}", "style": null}

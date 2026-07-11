@@ -13,6 +13,13 @@ from app.services.telegram import start_telegram_bot, stop_telegram_bot
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    print(
+        "[startup] models — "
+        f"LLM_MODEL={settings.LLM_MODEL} "
+        f"PHOTO_DESCRIPTION_MODEL={settings.PHOTO_DESCRIPTION_MODEL} "
+        f"TTS_MODEL={settings.TTS_MODEL}",
+        flush=True,
+    )
     settings.audio_dir.mkdir(parents=True, exist_ok=True)
     settings.photos_dir.mkdir(parents=True, exist_ok=True)
     settings.reports_dir.mkdir(parents=True, exist_ok=True)

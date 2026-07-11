@@ -37,22 +37,53 @@ class Pipe:
     def pipes(self) -> list[dict]:
         return [{"id": "diary-assistant", "name": "Dagbokassistenten 📔"}]
 
+    # Words that signal the user actually wants to see the images, not just
+    # read about them. Covers Swedish (this is a Swedish diary) and English.
+    _IMAGE_KEYWORDS = (
+        "bild", "bilder", "bilden", "foto", "fotot", "foton", "fotografi",
+        "kort", "korten", "visa", "se ", "titta", "photo", "picture", "image",
+        "show me", "let me see",
+    )
+
+    @classmethod
+    def _wants_images(cls, question: str) -> bool:
+        """True if the user explicitly asked to see the actual photos."""
+        q = question.lower()
+        return any(kw in q for kw in cls._IMAGE_KEYWORDS)
+
     @staticmethod
-    def _append_photos(answer: str, photos: list[dict]) -> str:
-        """Append photos as markdown images so Open WebUI renders them inline."""
+    def _append_photos(answer: str, photos: list[dict], include_images: bool) -> str:
+        """Append photo info to the answer.
+
+        By default only the descriptions are listed (no image data). When the
+        user asked to see the photos, the images are embedded as markdown so
+        Open WebUI renders them inline.
+        """
         lines = [answer.rstrip(), ""]
         for p in photos:
-            src = p.get("data_url") or p.get("url") or ""
-            if not src:
-                continue
             date_str = p.get("date", "")
             description = (p.get("description") or "").strip()
-            alt = f"{date_str}: {description}" if description else date_str
-            alt = alt.replace("\n", " ").replace("]", "")
-            lines.append(f"![{alt}]({src})")
-            if description:
-                lines.append(f"*{date_str} — {description}*")
+
+            if include_images:
+                src = p.get("data_url") or p.get("url") or ""
+                if not src:
+                    continue
+                alt = f"{date_str}: {description}" if description else date_str
+                alt = alt.replace("\n", " ").replace("]", "")
+                lines.append(f"![{alt}]({src})")
+                if description:
+                    lines.append(f"*{date_str} — {description}*")
+                lines.append("")
+            else:
+                caption = description or (p.get("caption") or "").strip()
+                if not caption and not date_str:
+                    continue
+                lines.append(f"📷 *{date_str}* — {caption}" if caption else f"📷 *{date_str}*")
+
+        if not include_images and photos:
             lines.append("")
+            lines.append("_Fråga efter bilderna om du vill se dem._")
+
         return "\n".join(lines).rstrip()
 
     def _append_audio(self, answer: str, audio_url: str | None, label: str | None) -> str:
@@ -105,7 +136,8 @@ class Pipe:
             answer = data.get("answer", "Inget svar från dagboken.")
             photos = data.get("photos") or []
             if photos:
-                answer = self._append_photos(answer, photos)
+                include_images = self._wants_images(question)
+                answer = self._append_photos(answer, photos, include_images)
             audio_url = data.get("audio_url")
             if audio_url:
                 answer = self._append_audio(answer, audio_url, data.get("audio_label"))

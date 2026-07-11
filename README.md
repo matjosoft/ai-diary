@@ -33,6 +33,7 @@ Audio is saved and acknowledged immediately. Transcription, LLM analysis, and su
 - **Transcription** -- via OpenRouter audio API (configurable model)
 - **LLM analysis** -- extracts summary, mood, events, people, topics, and planned actions
 - **Photo capture** -- send images via Telegram; a vision model writes a Swedish description and attaches the photo to the day's entry
+- **Health data** -- steps, distance, active energy, and flights climbed from Apple Health. An iPhone Shortcut builds a daily JSON snapshot; send it either as a `POST /api/health` (direct, when on the same network as the Pi) or by pasting the JSON as a text message into the Telegram bot chat (works from anywhere -- the message must come from you, not from a bot). Both paths upsert the same date-keyed row that feeds chat and audio summaries
 - **Daily merging** -- multiple recordings on the same day are combined into a single entry
 - **Full-text search** -- FTS5 index over transcriptions, summaries, topics, and people
 - **Smart chat** -- ask natural language questions; a query-analysis step picks the coarsest grain of data needed (daily summaries, monthly summaries, or full transcriptions) before answering. Photos for referenced dates are returned alongside the answer
@@ -51,6 +52,9 @@ Audio is saved and acknowledged immediately. Transcription, LLM analysis, and su
 | `GET` | `/api/entries/{date}/audio` | Download audio for a date |
 | `GET` | `/api/photos/{filename}` | Download a stored photo |
 | `POST` | `/api/chat` | Ask a question about your diary |
+| `POST` | `/api/health` | Upsert a day's health data (JSON body) |
+| `GET` | `/api/health` | List health data (`?from=YYYY-MM-DD&to=YYYY-MM-DD`) |
+| `GET` | `/api/health/{date}` | Get a single day's health data |
 | `GET` | `/api/reports/monthly/{YYYY-MM}` | Monthly report |
 | `GET` | `/api/reports/yearly/{YYYY}` | Yearly report |
 | `GET` | `/api/audio-summaries/day/{YYYY-MM-DD}` | Podcast-style audio summary for a day |
