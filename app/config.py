@@ -37,6 +37,18 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_ALLOWED_USERS: str = ""  # comma-separated Telegram user IDs
 
+    # Google Health API (Fitbit sync) — OAuth 2.0 credentials.
+    # Obtain a refresh token once via the OAuth 2.0 Playground against your own
+    # Google account (testing mode; no CASA verification needed for personal use).
+    GOOGLE_HEALTH_CLIENT_ID: str = ""
+    GOOGLE_HEALTH_CLIENT_SECRET: str = ""
+    GOOGLE_HEALTH_REFRESH_TOKEN: str = ""
+    GOOGLE_HEALTH_TOKEN_URI: str = "https://oauth2.googleapis.com/token"
+    GOOGLE_HEALTH_API_BASE: str = "https://health.googleapis.com"
+    GOOGLE_HEALTH_SOURCE: str = "fitbit"  # stored in health_data.source
+    # Chat id for daily sync notifications. Empty => first id in TELEGRAM_ALLOWED_USERS.
+    HEALTH_SYNC_NOTIFY_CHAT_ID: str = ""
+
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8000

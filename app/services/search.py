@@ -196,8 +196,8 @@ def _format_health_line(h: dict) -> str:
         parts.append(f"Steg: {h['steps']}")
     if h.get("distance_km") is not None:
         parts.append(f"Distans: {h['distance_km']:.1f} km")
-    if h.get("active_energy_kcal") is not None:
-        parts.append(f"Aktiv energi: {h['active_energy_kcal']:.0f} kcal")
+    if h.get("total_calories_kcal") is not None:
+        parts.append(f"Kalorier: {h['total_calories_kcal']:.0f} kcal")
     if h.get("flights_climbed") is not None:
         parts.append(f"Trappor: {h['flights_climbed']}")
     return f"**{h['date']}** — " + ", ".join(parts) if parts else f"**{h['date']}** — (ingen data)"

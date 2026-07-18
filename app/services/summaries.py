@@ -72,7 +72,7 @@ def _health_block(health_rows: list[dict], total_days: int | None = None) -> str
     steps_total = _sum("steps")
     steps_days = _count("steps")
     distance_total = _sum("distance_km")
-    energy_total = _sum("active_energy_kcal")
+    energy_total = _sum("total_calories_kcal")
     flights_total = _sum("flights_climbed")
 
     def _sv_int(n: float) -> str:
@@ -88,8 +88,8 @@ def _health_block(health_rows: list[dict], total_days: int | None = None) -> str
         )
     if _count("distance_km"):
         lines.append(f"Distans totalt: {distance_total:.1f} km")
-    if _count("active_energy_kcal"):
-        lines.append(f"Aktiv energi: {int(energy_total)} kcal")
+    if _count("total_calories_kcal"):
+        lines.append(f"Kalorier: {int(energy_total)} kcal")
     if _count("flights_climbed"):
         lines.append(f"Trappor: {int(flights_total)}")
 

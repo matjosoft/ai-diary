@@ -26,13 +26,17 @@ def save_health_data(payload: HealthDataRequest) -> str:
 
         conn.execute(
             "INSERT INTO health_data "
-            "(date, steps, distance_km, active_energy_kcal, flights_climbed, source, raw_data, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now')) "
+            "(date, steps, distance_km, active_energy_kcal, flights_climbed, "
+            "resting_heart_rate, sleep_minutes, total_calories_kcal, source, raw_data, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now')) "
             "ON CONFLICT(date) DO UPDATE SET "
             "steps=excluded.steps, "
             "distance_km=excluded.distance_km, "
             "active_energy_kcal=excluded.active_energy_kcal, "
             "flights_climbed=excluded.flights_climbed, "
+            "resting_heart_rate=excluded.resting_heart_rate, "
+            "sleep_minutes=excluded.sleep_minutes, "
+            "total_calories_kcal=excluded.total_calories_kcal, "
             "source=excluded.source, "
             "raw_data=excluded.raw_data, "
             "updated_at=datetime('now')",
@@ -42,6 +46,9 @@ def save_health_data(payload: HealthDataRequest) -> str:
                 payload.distance_km,
                 payload.active_energy_kcal,
                 payload.flights_climbed,
+                payload.resting_heart_rate,
+                payload.sleep_minutes,
+                payload.total_calories_kcal,
                 payload.source,
                 json.dumps(payload.raw_data, ensure_ascii=False),
             ),
@@ -154,5 +161,12 @@ def format_health_confirmation(payload: HealthDataRequest, action: str) -> str:
         parts.append(f"{payload.active_energy_kcal:.0f} kcal")
     if payload.flights_climbed is not None:
         parts.append(f"{payload.flights_climbed} våningar")
+    if payload.resting_heart_rate is not None:
+        parts.append(f"vilopuls {payload.resting_heart_rate} bpm")
+    if payload.sleep_minutes is not None:
+        hours, minutes = divmod(payload.sleep_minutes, 60)
+        parts.append(f"sömn {hours}h {minutes}m")
+    if payload.total_calories_kcal is not None:
+        parts.append(f"{payload.total_calories_kcal:.0f} kcal totalt")
     detail = ", ".join(parts) if parts else "inga mätvärden"
     return f"<b>Hälsodata {payload.date.isoformat()}</b>\n{verb}: {detail}"

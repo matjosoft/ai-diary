@@ -52,6 +52,9 @@ CREATE TABLE IF NOT EXISTS health_data (
     distance_km REAL,
     active_energy_kcal REAL,
     flights_climbed INTEGER,
+    resting_heart_rate INTEGER,
+    sleep_minutes INTEGER,
+    total_calories_kcal REAL,
     source TEXT NOT NULL DEFAULT 'iphone',
     raw_data TEXT NOT NULL DEFAULT '{}',
     created_at DATETIME NOT NULL DEFAULT (datetime('now')),
@@ -110,6 +113,18 @@ def _migrate(conn: sqlite3.Connection):
         conn.execute("DROP TRIGGER IF EXISTS entries_au")
         conn.execute("DROP TABLE IF EXISTS entries_fts")
         conn.execute("ALTER TABLE entries ADD COLUMN meals TEXT NOT NULL DEFAULT '{}'")
+
+    # health_data gained richer metrics for the Google Health (Fitbit) sync.
+    hd_cursor = conn.execute("PRAGMA table_info(health_data)")
+    hd_columns = [row[1] for row in hd_cursor.fetchall()]
+    if hd_columns:  # skip on a fresh DB — SCHEMA creates the full table
+        for column, decl in (
+            ("resting_heart_rate", "INTEGER"),
+            ("sleep_minutes", "INTEGER"),
+            ("total_calories_kcal", "REAL"),
+        ):
+            if column not in hd_columns:
+                conn.execute(f"ALTER TABLE health_data ADD COLUMN {column} {decl}")
 
 
 def init_db():

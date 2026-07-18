@@ -33,7 +33,7 @@ Audio is saved and acknowledged immediately. Transcription, LLM analysis, and su
 - **Transcription** -- via OpenRouter audio API (configurable model)
 - **LLM analysis** -- extracts summary, mood, events, people, topics, and planned actions
 - **Photo capture** -- send images via Telegram; a vision model writes a Swedish description and attaches the photo to the day's entry
-- **Health data** -- steps, distance, active energy, and flights climbed from Apple Health. An iPhone Shortcut builds a daily JSON snapshot; send it either as a `POST /api/health` (direct, when on the same network as the Pi) or by pasting the JSON as a text message into the Telegram bot chat (works from anywhere -- the message must come from you, not from a bot). Both paths upsert the same date-keyed row that feeds chat and audio summaries
+- **Health data** -- steps, distance, active energy, and flights climbed from Apple Health, plus resting heart rate, sleep, and total calories from a Google Fitbit device. Three input paths, all upserting the same date-keyed row that feeds chat and audio summaries: an iPhone Shortcut `POST /api/health` (direct, on the same network as the Pi); pasting the Shortcut's JSON as a text message into the Telegram bot chat (works from anywhere -- the message must come from you, not from a bot); or a nightly **Google Health API (Fitbit) sync** (see [Google Health sync](#google-health-fitbit-sync))
 - **Daily merging** -- multiple recordings on the same day are combined into a single entry
 - **Full-text search** -- FTS5 index over transcriptions, summaries, topics, and people
 - **Smart chat** -- ask natural language questions; a query-analysis step picks the coarsest grain of data needed (daily summaries, monthly summaries, or full transcriptions) before answering. Photos for referenced dates are returned alongside the answer
@@ -112,6 +112,66 @@ python -m app
 
 The server starts on `http://0.0.0.0:8000` by default.
 
+## Google Health (Fitbit) sync
+
+Pull the day's metrics from a **Google Fitbit** device automatically each night via the
+[Google Health API](https://developers.google.com/health) — Google's official successor to the
+Fitbit Web API (uses Google OAuth 2.0; the legacy Fitbit Web API is turned down in September 2026).
+No phone in the loop.
+
+### One-time OAuth setup (testing mode)
+
+All Google Health API scopes are **Restricted**, which normally requires a privacy/security
+(CASA) review. For a personal project you avoid that by staying in OAuth **testing** mode against
+your own Google account:
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/), create a project, enable the
+   **Google Health API**, and configure the OAuth consent screen as **External / Testing**, adding
+   your own Google account as a **test user**.
+2. Create an **OAuth client ID** of type *Web application* and add
+   `https://developers.google.com/oauthplayground` as an authorized redirect URI.
+3. Go to the [OAuth 2.0 Playground](https://developers.google.com/oauthplayground), click the gear
+   icon → *Use your own OAuth credentials*, and paste your client ID/secret.
+4. In the scope box, request the read-only Google Health scopes you need, e.g.:
+   - `https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly` (steps, distance, energy, floors)
+   - `https://www.googleapis.com/auth/googlehealth.heart_rate.readonly`
+   - `https://www.googleapis.com/auth/googlehealth.sleep.readonly`
+5. Authorize, then exchange the code for tokens and copy the **refresh token**.
+
+Put the values in `.env`:
+
+```
+GOOGLE_HEALTH_CLIENT_ID=...
+GOOGLE_HEALTH_CLIENT_SECRET=...
+GOOGLE_HEALTH_REFRESH_TOKEN=...
+# optional overrides: GOOGLE_HEALTH_SOURCE (default "fitbit"), HEALTH_SYNC_NOTIFY_CHAT_ID
+```
+
+> **Heads up — 7-day token expiry:** while the OAuth app stays in *Testing* status, Google expires
+> the refresh token after ~7 days. When that happens the sync detects `invalid_grant` and sends you
+> a Telegram alert; just repeat steps 3–5 to mint a fresh refresh token. (Publishing the app to
+> *Production* removes the expiry but, for Restricted scopes, would require the CASA review.)
+
+### Run it
+
+```bash
+python -m app.jobs.health_sync                     # sync today
+python -m app.jobs.health_sync --date 2026-07-12   # a specific day
+python -m app.jobs.health_sync --from 2026-07-01 --to 2026-07-12   # backfill a range
+```
+
+Each run OAuths to the Google Health API, upserts the day's `health_data` row, and sends a Telegram
+confirmation with the numbers (or an alert on failure). Schedule it end-of-day with cron:
+
+```cron
+55 23 * * *  cd /path/to/ai-diary && python -m app.jobs.health_sync >> sync.log 2>&1
+```
+
+> The Google Health API v4 REST surface is new; all endpoint paths, data-type names, and response
+> parsing live in [`app/services/google_health.py`](app/services/google_health.py) behind clearly
+> marked constants (`METRICS`, `_DATA_POINTS_PATH`, `_extract_values`) so you can adjust them against
+> the live response without touching the rest of the app.
+
 ## Open WebUI Integration
 
 The file `openwebui_pipe.py` is a Pipe function for [Open WebUI](https://github.com/open-webui/open-webui).
@@ -148,6 +208,11 @@ app/
     reports.py         # Report generation
     audio_summary.py   # Build TTS-friendly podcast scripts and render to audio
     tts.py             # OpenRouter /audio/speech wrapper (with chunking)
+    health.py          # Health-data upsert + JSON-message parsing (shared ingest path)
+    google_health.py   # Google Health API (Fitbit) client — OAuth + daily metric fetch
+    notify.py          # One-shot Telegram sender (for standalone scripts/jobs)
+  jobs/
+    health_sync.py     # CLI: nightly Google Health (Fitbit) sync
   prompts/             # LLM prompt templates
     chat_query.txt          # System prompt for chat answers
     query_analysis.txt      # System prompt for query intent analysis

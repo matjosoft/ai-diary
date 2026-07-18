@@ -36,6 +36,9 @@ class HealthDataRequest(BaseModel):
     distance_km: float | None = None
     active_energy_kcal: float | None = None
     flights_climbed: int | None = None
+    resting_heart_rate: int | None = None
+    sleep_minutes: int | None = None
+    total_calories_kcal: float | None = None
     source: str = "iphone"
     raw_data: dict = {}
 
@@ -47,6 +50,9 @@ class HealthDataResponse(BaseModel):
     distance_km: float | None = None
     active_energy_kcal: float | None = None
     flights_climbed: int | None = None
+    resting_heart_rate: int | None = None
+    sleep_minutes: int | None = None
+    total_calories_kcal: float | None = None
     source: str
     raw_data: dict = {}
     created_at: datetime
