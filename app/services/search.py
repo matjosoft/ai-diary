@@ -7,10 +7,11 @@ Two-step flow:
 """
 
 import json
-from datetime import date
+from datetime import date, timedelta
 
 from app.database import get_connection
 from app.models import QueryIntent
+from app.services.health import format_sleep
 from app.services.llm import _get_client, _load_prompt
 from app.services.photos import fetch_photos_for_dates
 from app.config import settings
@@ -170,13 +171,20 @@ def _fetch_summaries(period_type: str, date_from: str | None, date_to: str | Non
 
 
 def _fetch_health(date_from: str | None, date_to: str | None, limit: int = 100) -> list[dict]:
-    """Fetch health rows within a date range."""
+    """Fetch health rows within a date range, plus one day of lookback.
+
+    A night is stored on the day it started, so the night *ending* on the
+    morning of `date_from` sits on the row before the range. Ask "hur sov jag
+    natten till 31 juli?" and the answer lives on 2026-07-30. The extra row is
+    rendered sleep-only by `_format_health_section` so its steps and calories
+    don't leak into totals for the requested period.
+    """
     query = "SELECT * FROM health_data WHERE 1=1"
     params: list = []
 
     if date_from:
         query += " AND date >= ?"
-        params.append(date_from)
+        params.append((date.fromisoformat(date_from) - timedelta(days=1)).isoformat())
     if date_to:
         query += " AND date <= ?"
         params.append(date_to)
@@ -190,6 +198,19 @@ def _fetch_health(date_from: str | None, date_to: str | None, limit: int = 100) 
     return [dict(row) for row in rows]
 
 
+def _sleep_part(h: dict) -> str | None:
+    """The sleep fragment for a health row, or None when the night is unrecorded.
+
+    Sleep is stored on the day the night *started* (see app/jobs/health_sync.py).
+    Spell the span out: "natten till X" and "natten efter X" are both common in
+    Swedish and mean opposite nights, so a bare label gets misread.
+    """
+    if h.get("sleep_minutes") is None:
+        return None
+    night_after = (date.fromisoformat(h["date"]) + timedelta(days=1)).isoformat()
+    return f"Sömn natten {h['date']}→{night_after}: {format_sleep(h['sleep_minutes'])}"
+
+
 def _format_health_line(h: dict) -> str:
     parts = []
     if h.get("steps") is not None:
@@ -200,14 +221,26 @@ def _format_health_line(h: dict) -> str:
         parts.append(f"Kalorier: {h['total_calories_kcal']:.0f} kcal")
     if h.get("flights_climbed") is not None:
         parts.append(f"Trappor: {h['flights_climbed']}")
+    if sleep := _sleep_part(h):
+        parts.append(sleep)
+    if h.get("resting_heart_rate") is not None:
+        parts.append(f"Vilopuls: {h['resting_heart_rate']} bpm")
     return f"**{h['date']}** — " + ", ".join(parts) if parts else f"**{h['date']}** — (ingen data)"
 
 
-def _format_health_section(rows: list[dict]) -> str | None:
+def _format_health_section(rows: list[dict], date_from: str | None = None) -> str | None:
+    """Render health rows; the day before `date_from` contributes its sleep only."""
     if not rows:
         return None
     lines = ["## Hälsa\n"]
-    lines.extend(_format_health_line(r) for r in rows)
+    for row in rows:
+        if date_from and row["date"] < date_from:
+            if sleep := _sleep_part(row):  # lookback row — see _fetch_health
+                lines.append(f"**{row['date']}** — {sleep}")
+        else:
+            lines.append(_format_health_line(row))
+    if len(lines) == 1:
+        return None
     return "\n".join(lines) + "\n"
 
 
@@ -300,7 +333,7 @@ async def smart_retrieve(intent: QueryIntent) -> str:
     )
     if include_health:
         health_rows = _fetch_health(intent.date_from, intent.date_to)
-        health_section = _format_health_section(health_rows)
+        health_section = _format_health_section(health_rows, intent.date_from)
         if health_section:
             sections.append(health_section)
 

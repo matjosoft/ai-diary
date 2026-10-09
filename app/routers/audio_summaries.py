@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
+from app.auth import token_query
 from app.services.audio_summary import generate_audio_summary, generate_script
 from app.services.tts import media_type
 
@@ -54,7 +55,7 @@ async def _respond(
         "label": result["label"],
         "entry_count": result["entry_count"],
         "script": result["script"],
-        "audio_url": f"/api/audio-summaries/file/{Path(result['audio_path']).name}",
+        "audio_url": f"/api/audio-summaries/file/{Path(result['audio_path']).name}{token_query()}",
     }
 
 

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
+from app.auth import token_query
 from app.config import settings
 from app.models import ChatPhoto, ChatRequest, ChatResponse
 from app.services.audio_summary import (
@@ -35,7 +36,7 @@ def _build_chat_photos(answer: str, inline: bool) -> list[ChatPhoto]:
                 description=p.get("description") or "",
                 caption=p.get("caption"),
                 data_url=data_url,
-                url=f"/api/photos/{p['filename']}",
+                url=f"/api/photos/{p['filename']}{token_query()}",
             )
         )
     return out
@@ -61,7 +62,7 @@ async def chat(req: ChatRequest):
             return ChatResponse(
                 answer=answer,
                 entries_used=result["entry_count"],
-                audio_url=f"/api/audio-summaries/file/{Path(audio_path).name}",
+                audio_url=f"/api/audio-summaries/file/{Path(audio_path).name}{token_query()}",
                 audio_label=result["label"],
             )
         return ChatResponse(

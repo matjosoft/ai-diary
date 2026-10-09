@@ -34,7 +34,7 @@ Anpassa längd efter periodens omfång (en dag = kortare, ett år = längre). F�
    Vilka ämnen som förekommer i underlaget.
 
 7. **Kropp & rörelse (om hälsodata finns)**
-   Återge steg, distans, energi och trappor som siffror i en mening. Hoppa över om data saknas.
+   Återge steg, distans, energi, trappor, sömn och vilopuls som siffror i en mening. Sömnen avser natten *efter* det datum den står på. Hoppa över om data saknas.
 
 8. **Mat & vardag (om måltidsdata finns)**
    Återge registrerade måltider sakligt. Hoppa över om tomt.

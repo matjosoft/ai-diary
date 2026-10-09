@@ -34,7 +34,7 @@ Anpassa längd efter periodens omfång (en dag = kortare, ett år = längre och 
    Återkommande ämnen och projekt — gärna med en glimt om hur ofta samma sak dyker upp.
 
 7. **Segment — Kropp & rörelse (om hälsodata finns)**
-   Häckla eller hylla stegen, distansen och trapporna. ("Femton tusen steg på en dag... och sen noll i tre dagar. Balans, sägs det.") Hoppa över om data saknas.
+   Häckla eller hylla stegen, distansen, trapporna och sömnen. ("Femton tusen steg på en dag... och sen noll i tre dagar. Balans, sägs det. Sex timmars sömn på det, förstås.") Sömnen hör till natten *efter* det datum den står på. Hoppa över om data saknas.
 
 8. **Segment — Mat & vanor (om måltidsdata finns)**
    Driv med mönster i frukost, lunch och middag. Hoppa över om tomt.

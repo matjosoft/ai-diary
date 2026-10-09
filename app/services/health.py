@@ -16,6 +16,12 @@ from app.models import HealthDataRequest
 logger = logging.getLogger(__name__)
 
 
+def format_sleep(minutes: float) -> str:
+    """Minutes as "7h 39m" — how sleep is written everywhere it's shown or fed to the LLM."""
+    hours, mins = divmod(int(round(minutes)), 60)
+    return f"{hours}h {mins}m"
+
+
 def save_health_data(payload: HealthDataRequest) -> str:
     """Upsert a health row keyed by date. Returns 'inserted' or 'updated'."""
     with get_connection() as conn:
@@ -55,6 +61,22 @@ def save_health_data(payload: HealthDataRequest) -> str:
         )
 
     return "updated" if existed else "inserted"
+
+
+def update_sleep_minutes(day: date_cls, minutes: int) -> None:
+    """Write only sleep_minutes for a date, leaving that day's other metrics alone.
+
+    A night's sleep lands a day later than the rest of the day's numbers (the
+    sync runs in the evening, before the night it belongs to), so it has to be
+    patched into an existing row rather than upserted with a whole payload.
+    """
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO health_data (date, sleep_minutes) VALUES (?, ?) "
+            "ON CONFLICT(date) DO UPDATE SET "
+            "sleep_minutes=excluded.sleep_minutes, updated_at=datetime('now')",
+            (day.isoformat(), minutes),
+        )
 
 
 # Incoming keys vary with how the Shortcut is built; accept common spellings.
@@ -164,8 +186,7 @@ def format_health_confirmation(payload: HealthDataRequest, action: str) -> str:
     if payload.resting_heart_rate is not None:
         parts.append(f"vilopuls {payload.resting_heart_rate} bpm")
     if payload.sleep_minutes is not None:
-        hours, minutes = divmod(payload.sleep_minutes, 60)
-        parts.append(f"sömn {hours}h {minutes}m")
+        parts.append(f"sömn {format_sleep(payload.sleep_minutes)}")
     if payload.total_calories_kcal is not None:
         parts.append(f"{payload.total_calories_kcal:.0f} kcal totalt")
     detail = ", ".join(parts) if parts else "inga mätvärden"

@@ -33,7 +33,7 @@ Anpassa längd och djup efter periodens omfång (en dag = kortare, ett år = lä
    Vad har upptagit tankarna? Återkommande projekt, frågor, intressen.
 
 7. **Segment — Kropp & rörelse (om hälsodata finns)**
-   Steg, distans, energi, trappor — sätt in i en berättelse, inte som en uppläsning. ("Kroppen rörde sig nästan femton tusen steg den här dagen — en av månadens tyngsta promenadrundor.") Hoppa över segmentet om data saknas.
+   Steg, distans, energi, trappor, sömn, vilopuls — sätt in i en berättelse, inte som en uppläsning. ("Kroppen rörde sig nästan femton tusen steg den här dagen — en av månadens tyngsta promenadrundor, och natten efter blev åtta timmar lång.") Sömnen hör till natten *efter* det datum den står på. Hoppa över segmentet om data saknas.
 
 8. **Segment — Mat & vardag (om måltidsdata finns)**
    Korta noteringar om mönster i frukost, lunch, middag. Hoppa över om tomt.

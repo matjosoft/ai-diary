@@ -25,6 +25,10 @@ class Pipe:
             default="",
             description="Public, browser-reachable base URL of the diary API. Used when building audio links the user's browser opens. Leave empty to fall back to DIARY_API_URL.",
         )
+        API_TOKEN: str = Field(
+            default="",
+            description="Shared secret for the diary API (API_TOKEN in the server's .env). Sent as the X-API-Key header. Leave empty if the server has no token configured.",
+        )
         REQUEST_TIMEOUT: int = Field(
             default=120,
             description="Timeout in seconds for diary API requests",
@@ -126,9 +130,13 @@ class Pipe:
         ]
 
         try:
+            headers = {}
+            if self.valves.API_TOKEN.strip():
+                headers["X-API-Key"] = self.valves.API_TOKEN.strip()
             response = requests.post(
                 f"{self.valves.DIARY_API_URL}/api/chat",
                 json={"question": question, "messages": history, "client_type": "web"},
+                headers=headers,
                 timeout=self.valves.REQUEST_TIMEOUT,
             )
             response.raise_for_status()
@@ -150,6 +158,11 @@ class Pipe:
         except requests.Timeout:
             return "⚠️ Dagboks-API:et svarade inte inom tidsgränsen. Försök igen."
         except requests.HTTPError as e:
+            if e.response.status_code == 401:
+                return (
+                    "⚠️ Dagboks-API:et avvisade anropet (401). "
+                    "Kontrollera att valven `API_TOKEN` matchar `API_TOKEN` i serverns `.env`."
+                )
             return f"⚠️ Fel från dagboks-API:et: {e.response.status_code} — {e.response.text}"
         except Exception as e:
             return f"⚠️ Oväntat fel: {e}"

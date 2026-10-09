@@ -10,6 +10,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.database import get_connection
+from app.services.health import format_sleep
 from app.services.llm import _get_client, PROJECT_ROOT
 
 SUMMARY_PROMPT = """\
@@ -63,11 +64,14 @@ def _health_block(health_rows: list[dict], total_days: int | None = None) -> str
     if not health_rows:
         return ""
 
+    def _values(field: str) -> list[float]:
+        return [r[field] for r in health_rows if r.get(field) is not None]
+
     def _sum(field: str) -> float:
-        return sum(r[field] for r in health_rows if r.get(field) is not None)
+        return sum(_values(field))
 
     def _count(field: str) -> int:
-        return sum(1 for r in health_rows if r.get(field) is not None)
+        return len(_values(field))
 
     steps_total = _sum("steps")
     steps_days = _count("steps")
@@ -92,6 +96,19 @@ def _health_block(health_rows: list[dict], total_days: int | None = None) -> str
         lines.append(f"Kalorier: {int(energy_total)} kcal")
     if _count("flights_climbed"):
         lines.append(f"Trappor: {int(flights_total)}")
+    # Sleep and pulse only mean anything per night/day — a period total would be
+    # nonsense, so report the average plus the range the LLM can talk about.
+    if sleep := _values("sleep_minutes"):
+        lines.append(
+            f"Sömn: snitt {format_sleep(sum(sleep) / len(sleep))}/natt "
+            f"(kortast {format_sleep(min(sleep))}, längst {format_sleep(max(sleep))}, "
+            f"{len(sleep)} nätter med data)"
+        )
+    if pulse := _values("resting_heart_rate"):
+        lines.append(
+            f"Vilopuls: snitt {sum(pulse) / len(pulse):.0f} bpm "
+            f"(lägst {int(min(pulse))}, högst {int(max(pulse))})"
+        )
 
     return "\n".join(lines) + "\n"
 

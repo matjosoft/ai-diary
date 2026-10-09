@@ -25,6 +25,9 @@ Fält:
   - "lookup" = hitta specifik data ("när träffade jag Anna senast?")
 
 Regler:
+- Frågor om hälsodata (sömn, steg, distans, vilopuls, kalorier, trappor) ska ha question_type
+  "trend" eller "summary" — hälsosiffrorna bifogas bara för de typerna eller när ett
+  datumintervall anges. Detta gäller även korta frågor som "hur mycket sov jag?"
 - Om ingen tidsperiod nämns, anta "all" och lämna date_from/date_to som null
 - Vid "förra veckan" beräkna rätt datum baserat på dagens datum
 - Vid "i mars" utan år, anta innevarande år om månaden redan passerat, annars föregående år

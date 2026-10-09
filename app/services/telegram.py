@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import re
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from telegram import Update
@@ -20,6 +20,15 @@ from app.services.audio_summary import (
     generate_audio_summary,
 )
 from app.services.edits import apply_edit, detect_edit, format_edit_confirmation, reanalyze_affected_entries
+from app.services.google_health import GoogleHealthAuthError
+from app.services.google_oauth import (
+    TESTING_TOKEN_LIFETIME_DAYS,
+    complete_from_text,
+    extract_code,
+    reauth_message,
+    start_pending_flow,
+    token_status,
+)
 from app.services.health import (
     format_health_confirmation,
     parse_health_message,
@@ -57,6 +66,8 @@ class _TelegramNetworkErrorFilter(logging.Filter):
 _chat_history: dict[int, list[dict]] = {}
 MAX_HISTORY = 6
 MAX_PHOTOS_PER_REPLY = 10
+# Days to look back for health rows missed while the Google token was expired.
+HEALTH_BACKFILL_DAYS = 10
 
 
 async def _send_photos_for_answer(message, answer: str):
@@ -151,7 +162,8 @@ async def _start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         '- "Ge mig en ljudsammanfattning för idag"\n'
         '- "Gör en podcast av juni"\n'
         "- /summary månaden\n"
-        "- /summary ytd"
+        "- /summary ytd\n\n"
+        "/healthauth förnyar Google-kopplingen för hälsodata."
     )
 
 
@@ -161,6 +173,70 @@ async def _clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     _chat_history.pop(chat_id, None)
     await update.message.reply_text("Konversationshistorik rensad.")
+
+
+async def _healthauth_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """`/healthauth` — start a Google re-authorisation for the Fitbit sync.
+
+    Sends the consent link; the user approves in a browser and pastes the
+    resulting address back into this chat, which `_handle_text` picks up.
+    """
+    if not _is_allowed(update.effective_user.id):
+        return
+    try:
+        flow = await asyncio.get_event_loop().run_in_executor(None, start_pending_flow)
+    except GoogleHealthAuthError as exc:
+        await update.message.reply_text(f"Kan inte starta OAuth-flödet: {exc}")
+        return
+
+    status = await asyncio.get_event_loop().run_in_executor(None, token_status)
+    if not status.ok:
+        state = f"Nuvarande token: {status.detail}"
+    elif status.days_left is not None:
+        state = f"Nuvarande token: giltig, ca {status.days_left} dag(ar) kvar."
+    else:
+        state = "Nuvarande token: giltig."
+    await update.message.reply_text(
+        reauth_message(state, url=flow.url), parse_mode="HTML", disable_web_page_preview=True
+    )
+
+
+async def _complete_health_auth(message, text: str) -> None:
+    """Exchange a pasted OAuth redirect for a refresh token and catch up the sync."""
+    loop = asyncio.get_event_loop()
+    try:
+        await loop.run_in_executor(None, complete_from_text, text)
+    except GoogleHealthAuthError as exc:
+        await message.reply_text(f"Kunde inte förnya token: {exc}")
+        return
+    except Exception as exc:  # noqa: BLE001 — never leak a traceback into the chat
+        logger.exception("Error completing Google health re-auth")
+        await message.reply_text(f"Fel vid tokenförnyelse: {exc}")
+        return
+
+    expires = date.today() + timedelta(days=TESTING_TOKEN_LIFETIME_DAYS)
+    await message.reply_text(
+        f"✅ Google-token förnyad — håller till omkring {expires.isoformat()}."
+    )
+
+    # Catch up the days the sync missed while the token was dead.
+    # local imports: job → service direction
+    from app.jobs.health_sync import backfill_missing_sleep, missing_dates, sync_dates
+
+    dates = await loop.run_in_executor(None, missing_dates, HEALTH_BACKFILL_DAYS)
+    if dates:
+        await message.reply_text(f"Hämtar {len(dates)} dag(ar) som missades...")
+        # fetch_day is synchronous httpx and takes ~15s per day; run the whole sync on
+        # its own loop in a worker thread so polling isn't blocked meanwhile.
+        await loop.run_in_executor(None, lambda: asyncio.run(sync_dates(dates)))
+
+    # Rows that exist but never got their sleep (it's stored a day late, so an
+    # outage strands it) — cheap to patch, and missing_dates can't see them.
+    patched = await loop.run_in_executor(
+        None, backfill_missing_sleep, HEALTH_BACKFILL_DAYS
+    )
+    if patched:
+        await message.reply_text(f"Fyllde även i sömn för {patched} tidigare dag(ar).")
 
 
 async def _handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -335,7 +411,14 @@ async def _handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     history = _get_history(chat_id)
 
-    # Step 0: Health-data snapshot pasted as a JSON message (the iPhone Shortcut
+    # Step 0: Google OAuth redirect pasted back after /healthauth (or after the
+    # nightly sync's expiry alert). Checked first — it's a cheap regex, and the
+    # pasted URL is meaningless to the chat model.
+    if extract_code(question):
+        await _complete_health_auth(update.message, question)
+        return
+
+    # Step 0a: Health-data snapshot pasted as a JSON message (the iPhone Shortcut
     # builds the JSON; you paste it into the chat). Cheap synchronous check —
     # do it before touching the LLM or chat action.
     health_payload = parse_health_message(question)
@@ -422,6 +505,7 @@ async def start_telegram_bot():
     _application.add_handler(CommandHandler("start", _start_command))
     _application.add_handler(CommandHandler("clear", _clear_command))
     _application.add_handler(CommandHandler("summary", _summary_command))
+    _application.add_handler(CommandHandler("healthauth", _healthauth_command))
     _application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, _handle_voice))
     _application.add_handler(
         MessageHandler(filters.PHOTO | filters.Document.IMAGE, _handle_photo)
